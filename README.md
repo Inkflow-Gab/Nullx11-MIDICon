@@ -13,6 +13,18 @@ Click either image to open the video on YouTube.
 
 ---
 
+## Web studio
+
+A browser-based **Nullx MIDICon Studio** is included: upload audio/video or a YouTube link, watch real conversion progress, preview the piano roll, refine note settings, download MIDI/JSON/CSV, and keep a private per-browser history. See [`README_WEB.md`](README_WEB.md) for setup, Docker, accuracy measurements, and limitations.
+
+An **Android companion APK** is built by GitHub Actions. It connects to a deployed MIDICon server over HTTPS; it does not bundle the Python transcription backend. See [`README_ANDROID.md`](README_ANDROID.md) for the Actions artifact, first-launch setup, and local Gradle build.
+
+```bash
+bash scripts/run_web.sh   # after the one-time setup in README_WEB.md
+```
+
+The original research CLI and Colab workflow below remain available.
+
 ## Quick start
 
 The easiest way to get started is [`Colab_Inference.ipynb`](Colab_Inference.ipynb): upload a song, run the cells, and download the MIDI. No local setup or checkpoint search required.
