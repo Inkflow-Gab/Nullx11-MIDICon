@@ -249,3 +249,20 @@ AGENTS.md
 colab_outputs/
 prepare_real_recordings.py
 run_refine_pipeline.py
+# MIDICon web studio: private user data, model weights, and build products
+.web-data/
+node_modules/
+web/*.tsbuildinfo
+web/test-results/
+web/playwright-report/
+
+# MIDICon Android companion: local SDK/build state and installable artifacts
+android/.gradle/
+android/**/build/
+android/local.properties
+android/.kotlin/
+*.apk
+*.aab
+*.keystore
+*.jks
+!android/gradlew.bat
