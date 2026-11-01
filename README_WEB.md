@@ -39,7 +39,7 @@ Deployment is defined in [`.github/workflows/pages.yml`](.github/workflows/pages
 Browser-mode limits and guarantees:
 
 - Basic Pitch only; no piano specialist and no YouTube fetching.
-- Up to **25 MB** and **90 seconds** of browser-decodable audio per conversion.
+- Up to **100 MB** and **10 minutes** of browser-decodable audio per conversion. Long clips are processed in overlapping model windows with live progress, elapsed/remaining time, cancellation, and a keep-tab-open reminder.
 - One active conversion at a time; up to 40 stored local jobs.
 - Audio/results live in this browser’s IndexedDB on this device. They are not synced, and clearing site data can remove them.
 - The first conversion downloads about 11 MB of ONNX Runtime WASM plus the small Basic Pitch model. The service worker caches these for offline reuse.
@@ -158,7 +158,7 @@ cd web && npm run build
 cd web && npx playwright test                  # requires the app on :3000 and a Playwright browser
 ```
 
-The API suite currently has 25 tests; the opt-in real-model suite has 2. Playwright has 5 full-server browser tests and 2 static-host browser tests. The API tests isolate their SQLite/job directories from the running preview.
+The API suite currently has 25 tests; the opt-in real-model suite has 2. Playwright has 5 full-server browser tests and 4 static-host browser tests. The API tests isolate their SQLite/job directories from the running preview.
 
 ```bash
 # Full-server browser tests (app + API on :3000)
@@ -168,7 +168,7 @@ cd web && npx playwright test tests/studio.spec.ts
 cd web && BASE_URL=http://127.0.0.1:4173/Nullx11-MIDICon/ npx playwright test tests/static.spec.ts
 ```
 
-The suites cover real demo/upload transcription, playback, MIDI download, refinement, history actions, YouTube URL validation, manual piano-roll editing/versioning, library batch download, PWA manifest/service-worker/offline behavior, mobile layout, and real on-device WebAssembly conversion under a GitHub Pages-style subpath—including offline conversion after the model/runtime are cached.
+The suites cover real demo/upload transcription, playback, MIDI download, refinement, history actions, YouTube URL validation, manual piano-roll editing/versioning, library batch download, PWA manifest/service-worker/offline behavior, mobile layout, and real on-device WebAssembly conversion under a GitHub Pages-style subpath—including offline conversion after the model/runtime are cached, a real 2-minute on-device conversion, and long-clip cancellation.
 
 ## Architecture
 

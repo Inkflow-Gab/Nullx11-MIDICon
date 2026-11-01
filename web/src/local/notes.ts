@@ -61,9 +61,29 @@ export function decodeNotes(frames: Float32Array, onsets: Float32Array, count: n
     add(from, to, pitch);
   }
   // Recover sustained energy not assigned by an onset, suppressing adjacent bins.
+  // A block index keeps the residual peak search fast for 10-minute clips: scanning
+  // every sample once per recovered note would be O(notes × frames) in JavaScript.
+  const blockSize = 64;
+  const blockCount = Math.ceil(count / blockSize);
+  const blockMax = new Float32Array(blockCount);
+  const blockPeak = new Int32Array(blockCount);
+  const rebuildBlock = (block: number) => {
+    let maximum = -1, peak = -1;
+    const from = block * blockSize, to = Math.min(count, from + blockSize);
+    for (let t = from; t < to; t++) for (let p = 0; p < width; p++) {
+      const i = t * width + p, value = remaining[i];
+      if (value > maximum) { maximum = value; peak = i; }
+    }
+    blockMax[block] = maximum; blockPeak[block] = peak;
+  };
+  for (let block = 0; block < blockCount; block++) rebuildBlock(block);
+  const rebuildRange = (from: number, to: number) => {
+    const first = Math.max(0, Math.floor(from / blockSize)), last = Math.min(blockCount - 1, Math.floor(to / blockSize));
+    for (let block = first; block <= last; block++) rebuildBlock(block);
+  };
   for (;;) {
     let maximum = frameThreshold, peak = -1;
-    for (let i = 0; i < remaining.length; i++) if (remaining[i] > maximum) { maximum = remaining[i]; peak = i; }
+    for (let block = 0; block < blockCount; block++) if (blockMax[block] > maximum) { maximum = blockMax[block]; peak = blockPeak[block]; }
     if (peak < 0) break;
     const middle = Math.floor(peak / width), pitch = peak % width;
     remaining[peak] = 0;
@@ -87,6 +107,7 @@ export function decodeNotes(frames: Float32Array, onsets: Float32Array, count: n
       t--;
     }
     const from = t + 1 + quiet;
+    rebuildRange(Math.min(from, middle), Math.max(to, middle));
     add(from, to, pitch);
   }
   return notes.sort((a, b) => a.start - b.start || a.pitch - b.pitch);

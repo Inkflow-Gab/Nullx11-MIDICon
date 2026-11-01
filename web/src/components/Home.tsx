@@ -26,7 +26,7 @@ export function Home({ browserMode, busy, completedCount, recent, onStudio, onDe
       <div className="home-hero-copy">
         <span className="eyebrow"><span /> NULLX MIDICON · {browserMode ? 'BROWSER STUDIO' : 'FULL STUDIO'}</span>
         <h1>Your next idea is<br />already in the sound<span className="heading-dot">.</span></h1>
-        <p>Turn a recording into playable piano MIDI. Hear it, shape it, and make it unmistakably yours.</p>
+        <p>Turn a short loop or a full-length track into playable piano MIDI. Hear it, shape it, and make it unmistakably yours.</p>
         <div className="home-hero-actions">
           <button className="button primary" onClick={onStudio}><WandSparkles size={17} />Open the studio<ArrowRight size={16} /></button>
           <button className="button secondary" disabled={busy} onClick={onDemo}><Music2 size={16} />Try the original demo</button>
@@ -34,7 +34,7 @@ export function Home({ browserMode, busy, completedCount, recent, onStudio, onDe
         <div className="home-hero-meta">
           <span><Check size={13} />No account needed</span>
           <span><Check size={13} />{browserMode ? 'Runs on this device' : 'Two neural engines'}</span>
-          <span><Check size={13} />Standard MIDI export</span>
+          <span><Check size={13} />Long clips · up to 10 min</span>
         </div>
       </div>
       <div className="home-hero-art" aria-hidden="true">
@@ -54,7 +54,7 @@ export function Home({ browserMode, busy, completedCount, recent, onStudio, onDe
       <span className="home-mode-icon">{browserMode ? <LockKeyhole size={21} /> : <Sparkles size={21} />}</span>
       <div>
         <h2>{browserMode ? 'You’re in the browser studio' : 'You’re in the full studio'}</h2>
-        <p>{browserMode ? 'GitHub Pages hosts the app; your device does the listening. Convert up to 90 seconds / 25 MB with Basic Pitch. YouTube imports and the piano specialist need the full MIDICon server.' : 'Upload longer audio, import permitted YouTube videos, and choose between the piano specialist and polyphonic Basic Pitch.'}</p>
+        <p>{browserMode ? 'GitHub Pages hosts the app; your device does the listening. Convert up to 10 minutes / 100 MB with Basic Pitch—long clips are processed in windows with live progress. YouTube imports and the piano specialist need the full MIDICon server.' : 'Upload longer audio, import permitted YouTube videos, and choose between the piano specialist and polyphonic Basic Pitch.'}</p>
       </div>
       <button className="text-button" onClick={onGuide}>Compare modes <ArrowUpRight size={14} /></button>
     </section>

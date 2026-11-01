@@ -34,6 +34,7 @@ export class PianoPreview {
     this.index = this.notes.findIndex(note => note.start >= from);
     if (this.index < 0) this.index = this.notes.length;
     this.running = true;
+    const endTime = this.notes.length ? this.notes.reduce((max, note) => Math.max(max, note.end), 0) : 0;
     // Resume sustained notes when seeking into the middle of a piece.
     this.notes.forEach((note, index) => {
       if (note.start < from && note.end > from + 0.03) this.voice(note, Math.min(0.8, note.end - from), index);
@@ -48,9 +49,8 @@ export class PianoPreview {
         this.index++;
       }
       this.onTick?.(now);
-      const end = this.notes.length ? Math.max(...this.notes.map(note => note.end)) : 0;
-      if (now >= end + 0.3) { void this.stop(); this.onEnd?.(); return; }
-      this.timer = window.setTimeout(tick, 35);
+      if (now >= endTime + 0.3) { void this.stop(); this.onEnd?.(); return; }
+      this.timer = window.setTimeout(tick, 50);
     };
     tick();
   }
