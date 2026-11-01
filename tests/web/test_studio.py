@@ -77,6 +77,19 @@ def test_cleanup_preserves_chords_and_merges_only_same_pitch():
     assert {n["pitch"] for n in result} == {60, 64, 67}
 
 
+def test_clean_cleanup_removes_weak_artifacts_and_harmonic_ghosts():
+    notes = [
+        {"start": 0, "end": 1, "pitch": 60, "velocity": 90},
+        {"start": .1, "end": .3, "pitch": 72, "velocity": 18},
+        {"start": .1, "end": .15, "pitch": 84, "velocity": 10},
+        {"start": 2, "end": 2.5, "pitch": 64, "velocity": 70},
+    ]
+    balanced, _ = refine_notes(notes, TranscriptionOptions(cleanup="balanced"), 120)
+    clean, _ = refine_notes(notes, TranscriptionOptions(cleanup="clean"), 120)
+    assert {n["pitch"] for n in balanced} == {60, 72, 84, 64}
+    assert {n["pitch"] for n in clean} == {60, 64}
+
+
 def test_transpose_range_dynamics_and_no_overlapping_identical_pitches():
     notes = [{"start": 0, "end": 1, "pitch": 60, "velocity": 100}, {"start": .5, "end": 1.5, "pitch": 60, "velocity": 80}, {"start": 0, "end": 1, "pitch": 107, "velocity": 70}]
     result, _ = refine_notes(notes, TranscriptionOptions(transpose=2, preserve_dynamics=False, merge_gap_ms=0), 120)

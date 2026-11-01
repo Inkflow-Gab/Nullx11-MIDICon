@@ -9,6 +9,7 @@ class TranscriptionOptions(BaseModel):
     sensitivity: int = Field(default=60, ge=10, le=90)
     min_duration_ms: int = Field(default=30, ge=20, le=500)
     merge_gap_ms: int = Field(default=20, ge=0, le=200)
+    cleanup: Literal["light", "balanced", "clean"] = "balanced"
     transpose: int = Field(default=0, ge=-12, le=12)
     quantize: Literal["off", "1/4", "1/8", "1/16"] = "off"
     tempo: int | None = Field(default=None, ge=40, le=240)

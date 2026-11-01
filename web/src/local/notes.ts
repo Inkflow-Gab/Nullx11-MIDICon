@@ -137,7 +137,7 @@ export function estimateKey(notes: Note[]): string {
   return key;
 }
 
-export function estimateTempo(audio: Float32Array): number {
+export function estimateTempo(audio: Float32Array, sampleRate = SAMPLE_RATE): number {
   const envelope: number[] = [];
   for (let i = 0; i < audio.length; i += FFT_HOP) {
     let sum = 0; const end = Math.min(audio.length, i + FFT_HOP);
@@ -146,10 +146,12 @@ export function estimateTempo(audio: Float32Array): number {
   }
   const flux = envelope.map((value, i) => Math.max(0, value - (envelope[i - 1] || 0)));
   let best = 0, tempo = 120;
-  for (let lag = 37; lag <= 129; lag++) {
+  const minLag = Math.max(8, Math.round(37 * sampleRate / SAMPLE_RATE));
+  const maxLag = Math.round(129 * sampleRate / SAMPLE_RATE);
+  for (let lag = minLag; lag <= maxLag; lag++) {
     let score = 0, normalizer = 0;
     for (let i = lag; i < flux.length; i++) { score += flux[i] * flux[i - lag]; normalizer += flux[i] * flux[i] + flux[i - lag] * flux[i - lag]; }
-    const bpm = 60 / (lag * FFT_HOP / SAMPLE_RATE);
+    const bpm = 60 / (lag * FFT_HOP / sampleRate);
     score = score / (normalizer || 1) * (1 - 0.08 * Math.abs(Math.log2(bpm / 110)));
     if (score > best) { best = score; tempo = bpm; }
   }

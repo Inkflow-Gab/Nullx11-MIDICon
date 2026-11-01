@@ -8,6 +8,7 @@ export function safeOptions(input: Partial<Options> = {}): Options {
   return { ...o,
     engine: o.engine === 'piano' ? 'piano' : o.engine === 'basic' ? 'basic' : 'auto',
     sensitivity: clamp(o.sensitivity, 10, 90, 60), min_duration_ms: clamp(o.min_duration_ms, 20, 1000, 30), merge_gap_ms: clamp(o.merge_gap_ms, 0, 500, 20),
+    cleanup: o.cleanup === 'light' ? 'light' : o.cleanup === 'clean' ? 'clean' : 'balanced',
     transpose: Math.round(clamp(o.transpose, -12, 12, 0)), quantize: ['off', '1/4', '1/8', '1/16'].includes(o.quantize) ? o.quantize : 'off',
     tempo: o.tempo == null ? null : clamp(o.tempo, 40, 240, 120), start_seconds: clamp(o.start_seconds, 0, 3600, 0),
     duration_seconds: o.duration_seconds == null ? null : clamp(o.duration_seconds, 0.2, 600, 90),
@@ -16,6 +17,9 @@ export function safeOptions(input: Partial<Options> = {}): Options {
 }
 
 export function refineNotes(raw: Note[], options: Options, tempo: number) {
+  const profile = options.cleanup || 'balanced';
+  const minimum = Math.max(options.min_duration_ms, profile === 'clean' ? 60 : 0) / 1000;
+  const gap = Math.max(options.merge_gap_ms, profile === 'clean' ? 35 : 0) / 1000;
   let notes = raw.map(note => ({ start: note.start, end: note.end, pitch: note.pitch + options.transpose, velocity: options.preserve_dynamics ? Math.max(1, Math.min(127, Math.round(note.velocity))) : 80 }))
     .filter(note => note.end > note.start && note.pitch >= 0 && note.pitch <= 127 && (!options.piano_range || (note.pitch >= 21 && note.pitch <= 108)));
   if (options.quantize !== 'off') {
@@ -26,11 +30,32 @@ export function refineNotes(raw: Note[], options: Options, tempo: number) {
   notes.sort((a, b) => a.pitch - b.pitch || a.start - b.start || a.end - b.end);
   const merged: Note[] = []; let mergeCount = 0; let previous: Note | undefined;
   for (const note of notes) {
-    if (previous?.pitch === note.pitch && note.start - previous.end >= 0 && note.start - previous.end <= options.merge_gap_ms / 1000) { previous.end = Math.max(previous.end, note.end); previous.velocity = Math.max(previous.velocity, note.velocity); mergeCount++; }
+    if (previous?.pitch === note.pitch && note.start - previous.end >= -0.012 && note.start - previous.end <= gap) { previous.end = Math.max(previous.end, note.end); previous.velocity = Math.max(previous.velocity, note.velocity); mergeCount++; }
     else { previous = { ...note }; merged.push(previous); }
   }
-  const minimum = options.min_duration_ms / 1000;
-  const cleaned = merged.filter(note => note.end - note.start >= minimum);
+  let cleaned = merged.filter(note => note.end - note.start >= minimum);
+  if (profile === 'clean') {
+    // Remove only very weak, very short artifacts; kept conservative so quiet
+    // real notes are not discarded just for being soft.
+    cleaned = cleaned.filter(note => !(note.velocity < 16 && note.end - note.start < 0.12));
+    // Suppress likely harmonic ghosts: a much weaker upper partial sitting on
+    // top of a stronger fundamental for most of its life. Real octave melody
+    // notes usually have comparable velocity and survive this test.
+    const lower = cleaned.filter(note => note.velocity >= 24).sort((a, b) => b.velocity - a.velocity);
+    cleaned = cleaned.filter(note => {
+      const duration = note.end - note.start;
+      if (duration < 0.05 || note.velocity >= 40) return true;
+      for (const base of lower) {
+        if (base === note || base.pitch >= note.pitch) continue;
+        const interval = note.pitch - base.pitch;
+        if (interval !== 12 && interval !== 19 && interval !== 24 && interval !== 28) continue;
+        if (note.velocity > base.velocity * 0.55) continue;
+        const overlap = Math.min(note.end, base.end) - Math.max(note.start, base.start);
+        if (overlap >= duration * 0.7 && base.end - base.start >= duration * 0.8) return false;
+      }
+      return true;
+    });
+  }
   previous = undefined;
   for (const note of cleaned) { if (previous?.pitch === note.pitch) previous.end = Math.min(previous.end, Math.max(previous.start + 0.005, note.start - 0.003)); previous = note; }
   const result = cleaned.filter(note => note.end - note.start >= 0.005).sort((a, b) => a.start - b.start || a.pitch - b.pitch).map(note => ({ ...note, start: Math.round(note.start * 1e5) / 1e5, end: Math.round(note.end * 1e5) / 1e5 }));

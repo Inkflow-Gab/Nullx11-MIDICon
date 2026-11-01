@@ -1,5 +1,7 @@
 import type { Options } from '../types';
 import { SAMPLE_RATE } from './notes';
+import { PIANO_SAMPLE_RATE } from './piano';
+import { resolveBrowserEngine } from './engines';
 
 export const BROWSER_MAX_SECONDS = 600;
 export const BROWSER_MAX_BYTES = 100 * 1024 * 1024;
@@ -28,10 +30,11 @@ export async function decodeAudio(blob: Blob, options: Options): Promise<{ audio
   if (options.start_seconds >= total) throw new Error('The trim start is after the end of the audio.');
   const duration = Math.min(options.duration_seconds || total - options.start_seconds, total - options.start_seconds, BROWSER_MAX_SECONDS);
   if (duration < 0.15) throw new Error('Choose at least 0.15 seconds of audio.');
+  const sampleRate = resolveBrowserEngine(options.engine) === 'piano' ? PIANO_SAMPLE_RATE : SAMPLE_RATE;
   const context = new AudioContext();
   try {
     let decoded: AudioBuffer | null = await context.decodeAudioData(await blob.arrayBuffer());
-    const offline = new OfflineAudioContext(1, Math.ceil(duration * SAMPLE_RATE), SAMPLE_RATE);
+    const offline = new OfflineAudioContext(1, Math.ceil(duration * sampleRate), sampleRate);
     const source = offline.createBufferSource(); source.buffer = decoded; source.connect(offline.destination);
     source.start(0, options.start_seconds, duration);
     const rendered = await offline.startRendering();
@@ -46,7 +49,7 @@ export async function decodeAudio(blob: Blob, options: Options): Promise<{ audio
       for (let i = from; i < to; i += 8) value = Math.max(value, Math.abs(audio[i]));
       return value / peak;
     });
-    return { audio, duration: audio.length / SAMPLE_RATE, waveform };
+    return { audio, duration: audio.length / sampleRate, waveform };
   } catch (error) {
     if (error instanceof Error && /silent|Choose at least/.test(error.message)) throw error;
     throw new Error('Your browser could not decode this file. Try a WAV, MP3, M4A, or MP4 with AAC audio.');

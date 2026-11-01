@@ -2,8 +2,8 @@
 
 A complete browser workspace for turning audio into playable piano MIDI. It ships in two modes:
 
-- **Browser studio (GitHub Pages / static hosting):** React + Vite + ONNX Runtime Web. Spotify Basic Pitch runs in a dedicated Web Worker on the user’s device; audio is never uploaded to MIDICon. IndexedDB keeps a private local library.
-- **Full studio (Python backend):** FastAPI + SQLite job queue, the piano-specialist ONNX engine, Basic Pitch, permitted YouTube import, longer uploads, and server-side retention.
+- **Browser studio (GitHub Pages / static hosting):** React + Vite + ONNX Runtime Web. The Kong piano specialist and Spotify Basic Pitch run in a dedicated Web Worker on the user’s device; audio is never uploaded to MIDICon. IndexedDB keeps a private local library.
+- **Full studio (Python backend):** FastAPI + SQLite job queue, the same piano-specialist and Basic Pitch engines, permitted YouTube import, longer uploads, and server-side retention.
 
 The same frontend detects which mode is available. GitHub Pages cannot execute the Python backend, so server-only features are clearly labeled rather than simulated.
 
@@ -38,11 +38,13 @@ Deployment is defined in [`.github/workflows/pages.yml`](.github/workflows/pages
 
 Browser-mode limits and guarantees:
 
-- Basic Pitch only; no piano specialist and no YouTube fetching.
+- Piano specialist (default Auto) and Basic Pitch run on-device. No YouTube fetching.
 - Up to **100 MB** and **10 minutes** of browser-decodable audio per conversion. Long clips are processed in overlapping model windows with live progress, elapsed/remaining time, cancellation, and a keep-tab-open reminder.
+- Note cleanup profiles: Light, Balanced, and Clean. Clean trims weak short artifacts and suppresses likely harmonic ghosts while preserving chords and real octave notes.
+- Piano-roll editing: drag to move, drag edges to resize, double-click to add, multi-select, octave/nudge/duplicate tools, velocity, undo/redo, and save-as-new-version. Practice playback at 0.5×–1.25×.
 - One active conversion at a time; up to 40 stored local jobs.
 - Audio/results live in this browser’s IndexedDB on this device. They are not synced, and clearing site data can remove them.
-- The first conversion downloads about 11 MB of ONNX Runtime WASM plus the small Basic Pitch model. The service worker caches these for offline reuse.
+- The first piano conversion downloads about 85 MB of piano-specialist weights plus ONNX Runtime WASM; Basic Pitch is a smaller alternative. The service worker caches models and runtime for offline reuse. The piano model is fetched on demand, not precached on first page load.
 - MIDI, JSON, CSV, per-job ZIP, editing/versioning, refinement, favorites, rename, delete, and library ZIP all run locally.
 
 To force browser mode on any host for testing, append `?mode=browser`. To force the backend mode, append `?mode=server`.
@@ -158,7 +160,7 @@ cd web && npm run build
 cd web && npx playwright test                  # requires the app on :3000 and a Playwright browser
 ```
 
-The API suite currently has 25 tests; the opt-in real-model suite has 2. Playwright has 5 full-server browser tests and 4 static-host browser tests. The API tests isolate their SQLite/job directories from the running preview.
+The API suite currently has 26 tests; the opt-in real-model suite has 2. Playwright has 5 full-server browser tests and 4 static-host browser tests. The API tests isolate their SQLite/job directories from the running preview.
 
 ```bash
 # Full-server browser tests (app + API on :3000)
@@ -174,7 +176,7 @@ The suites cover real demo/upload transcription, playback, MIDI download, refine
 
 ```text
 web/                     React + TypeScript + Vite studio (Home / Studio / Library / Guide)
-web/src/local/           Browser-mode decode, Basic Pitch worker, note cleanup, MIDI/ZIP writer, IndexedDB workspace
+web/src/local/           Browser-mode decode, piano + Basic Pitch workers, Kong postprocessor port, note cleanup, MIDI/ZIP writer, IndexedDB workspace
 web/scripts/             Copies model/demo/ORT WASM + licenses into public assets at build time
 web/public/sw.js         Subpath-safe PWA cache; never caches /api/*
 webapp/main.py           FastAPI routes, session cookie, CSRF/origin checks, SSE, downloads, static app

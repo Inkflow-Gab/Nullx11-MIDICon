@@ -19,3 +19,7 @@ const hash = await crypto.subtle.digest('SHA-256', await readFile(path.join(publ
 if (hash) console.log('Basic Pitch model SHA-256:', Buffer.from(hash).toString('hex'));
 await writeFile(path.join(publicDir, 'models/README.txt'), 'Basic Pitch ONNX model from Spotify Basic Pitch. Apache-2.0. See LICENSE and NOTICE.\n');
 console.log('Prepared local browser model, demo, and ONNX Runtime WebAssembly assets.');
+if (process.env.MIDICON_PIANO_ASSETS !== '0') {
+  const { preparePianoAssets } = await import('./prepare-piano-assets.mjs');
+  await preparePianoAssets();
+}

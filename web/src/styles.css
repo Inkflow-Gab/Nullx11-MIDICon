@@ -132,3 +132,12 @@ body{color:#28223a}
   .progress-stages>span{font-size:10px}
 }
 @media(max-width:620px){.mode-banner{align-items:flex-start}.mode-banner>span{flex-basis:calc(100% - 32px)}.mode-banner .text-button{margin-left:27px;flex-basis:100%;justify-content:flex-start}}
+
+/* v1.3 · richer editor + practice playback */
+.editor-transforms{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px 14px;border-top:1px solid var(--line);background:#fbfaff}
+.editor-transforms .text-button{font-size:11px;gap:4px}
+.editor-shortcuts{margin-left:auto;font-size:10px;color:var(--muted);letter-spacing:.01em}
+.roll-edit-hint{font-style:normal;color:var(--muted);font-size:10px}
+.player-rate{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.player-rate select{min-height:30px;padding:2px 6px;border-radius:8px;border:1px solid var(--line);background:#fff;font:inherit;font-size:12px;letter-spacing:0;text-transform:none;color:var(--ink)}
+@media(max-width:620px){.editor-shortcuts{flex-basis:100%;margin-left:0}.player-rate{margin-left:0}.roll-edit-hint{display:none}}

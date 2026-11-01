@@ -1,6 +1,7 @@
 import { DEFAULT_OPTIONS, isActive } from '../types';
 import type { Job, Note, Options, Result, Session } from '../types';
 import { BROWSER_EXTENSIONS, BROWSER_MAX_BYTES, BROWSER_MAX_SECONDS, decodeAudio } from './decode';
+import { browserEngineName, resolveBrowserEngine } from './engines';
 import { estimateKey } from './notes';
 import { exportMidi, libraryZip, normalizeEdits, notesCsv, notesJson, packageZip, refineNotes, safeOptions } from './midi';
 
@@ -16,7 +17,10 @@ let database: IDBDatabase | null = null;
 
 export const browserSession: Session = {
   workspace_id: 'this-device', retention_days: 0, max_upload_mb: 100, max_duration_seconds: BROWSER_MAX_SECONDS, max_jobs: 40,
-  engines: [{ id: 'basic', name: 'Basic Pitch · browser', description: 'Spotify Basic Pitch · runs privately on this device', ready: true }],
+  engines: [
+    { id: 'piano', name: 'Piano specialist · browser', description: 'High-accuracy piano onsets, offsets, and dynamics. Downloads once, then works offline.', ready: true },
+    { id: 'basic', name: 'Basic Pitch · browser', description: 'Spotify Basic Pitch · runs privately on this device', ready: true },
+  ],
   extensions: BROWSER_EXTENSIONS, scope: 'device', authentication: 'local-device',
 };
 
@@ -86,7 +90,6 @@ async function capacity(bytes: number) {
 }
 async function create(file: Blob, title: string, sourceType: Job['source_type'], options: Options) {
   await ready(); options = safeOptions(options);
-  if (options.engine === 'piano') throw new Error('The piano specialist needs the full server. Browser mode uses Basic Pitch; choose Auto or Polyphonic.');
   if (active) throw new Error('Let the current browser conversion finish or cancel it first.');
   if (cache.size >= browserSession.max_jobs) throw new Error('Your device library is full. Download and delete an older conversion first.');
   if (file.size > BROWSER_MAX_BYTES || file.size < 32) throw new Error('Choose a nonempty audio file smaller than 100 MB.');
@@ -112,7 +115,7 @@ async function run(id: string) {
         else if (message.type === 'error') { worker.terminate(); controller.worker = undefined; reject(new Error(message.message)); }
       };
       worker.onerror = () => { worker.terminate(); reject(new Error('The browser engine could not start. Use an up-to-date Chrome, Edge, Firefox, or Safari with WebAssembly enabled.')); };
-      worker.postMessage({ audio: decoded.audio, sensitivity: record.options.sensitivity, base: new URL(import.meta.env.BASE_URL, window.location.href).href }, [decoded.audio.buffer]);
+      worker.postMessage({ audio: decoded.audio, sensitivity: record.options.sensitivity, base: new URL(import.meta.env.BASE_URL, window.location.href).href, engine: resolveBrowserEngine(record.options.engine) }, [decoded.audio.buffer]);
     });
     checkCancelled(id);
     await update(id, { rawNotes: raw.notes, sourceTempo: raw.tempo });
@@ -130,7 +133,8 @@ async function finishRefinement(id: string, options: Options, raw: Note[], durat
   const refined = refineNotes(raw, options, tempo);
   if (!refined.notes.length) throw new Error('No confident notes were found. Try a cleaner recording, raise sensitivity, or shorten the shortest-note setting.');
   const current = cache.get(id)!;
-  const result: Result = { ...refined.stats, duration, tempo, key: estimateKey(refined.notes), engine: 'basic', engine_name: 'Basic Pitch · browser', lowest_pitch: Math.min(...refined.notes.map(note => note.pitch)), highest_pitch: Math.max(...refined.notes.map(note => note.pitch)), tempo_is_estimate: !options.tempo, key_is_estimate: true, meter: '4/4 (export default)', pedal_detected: false };
+  const engine = resolveBrowserEngine(options.engine);
+  const result: Result = { ...refined.stats, duration, tempo, key: estimateKey(refined.notes), engine, engine_name: browserEngineName(engine), lowest_pitch: Math.min(...refined.notes.map(note => note.pitch)), highest_pitch: Math.max(...refined.notes.map(note => note.pitch)), tempo_is_estimate: !options.tempo, key_is_estimate: true, meter: '4/4 (export default)', pedal_detected: false };
   const midi = exportMidi(refined.notes, tempo, options, current.title);
   checkCancelled(id);
   await update(id, { status: 'completed', progress: 100, stage: 'Your MIDI is ready', detail: refinement ? 'Refined without running the model again' : 'Created privately on this device', result, notes: refined.notes, midi, waveform: current.waveform, has_audio: true, completed_at: Date.now() / 1000, error: null });
@@ -157,14 +161,13 @@ export async function browserRetry(id: string, options?: Options) {
   await ready(); if (active) throw new Error('Let the current conversion finish first.'); const record = cache.get(id);
   if (!record || !['failed', 'cancelled'].includes(record.status)) throw new Error('Use Refine for a completed conversion.');
   const nextOptions = safeOptions(options || record.options);
-  if (nextOptions.engine === 'piano') throw new Error('The piano specialist needs the full server. Choose Auto or Polyphonic.');
   await update(id, { status: 'queued', progress: 0, error: null, result: null, completed_at: null, options: nextOptions }); void run(id); return publicJob(cache.get(id)!);
 }
 export async function browserRefine(id: string, options: Options) {
   await ready(); if (active) throw new Error('Let the current conversion finish first.'); const source = cache.get(id);
   if (!source || source.status !== 'completed') throw new Error('Only completed conversions can be refined.');
   options = safeOptions(options);
-  if (options.engine === 'piano') throw new Error('Choose Auto or Polyphonic to refine a browser conversion.');
+  if (resolveBrowserEngine(options.engine) !== resolveBrowserEngine(source.options.engine)) throw new Error('Refine reuses the original analysis. To switch engines, use Retry so the audio is re-analyzed.');
   options.start_seconds = source.options.start_seconds; options.duration_seconds = source.options.duration_seconds;
   await capacity(source.audio.size);
   const now = Date.now() / 1000;
