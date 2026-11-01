@@ -17,6 +17,8 @@ class TranscriptionOptions(BaseModel):
     preserve_dynamics: bool = True
     split_tracks: bool = True
     piano_range: bool = True
+    ai_assist: bool = False
+    ai_align: bool = False
     start_seconds: float = Field(default=0, ge=0, le=600)
     duration_seconds: float | None = Field(default=None, gt=0, le=600)
 

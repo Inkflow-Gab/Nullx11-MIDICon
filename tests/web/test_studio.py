@@ -215,6 +215,50 @@ def test_api_upload_progress_download_refine_and_owner_isolation(api, monkeypatc
     assert not main.store.job_dir(job_id).exists()
 
 
+def test_api_ai_assist_uses_local_beat_grid_and_keeps_original(api, monkeypatch):
+    client, _ = api
+    headers = {'X-MIDICon-Client': 'web'}
+    client.get('/api/session')
+
+    def fake_transcribe(path, options, progress, cancelled):
+        return [{"start": .03, "end": .45, "pitch": 60, "velocity": 80}, {"start": .52, "end": .95, "pitch": 64, "velocity": 72}], 'piano'
+
+    def fake_beats(path, **kwargs):
+        return {"model": "beat-this-small0", "model_name": "Beat This! small0 · local", "license": "MIT",
+                "beats": [0, .5, 1.0, 1.5], "downbeats": [0, 1.0], "tempo": 120.0, "meter": 4,
+                "beat_interval": .5, "beat_count": 4, "downbeat_count": 2}
+
+    monkeypatch.setattr('webapp.pipeline.transcribe', fake_transcribe)
+    monkeypatch.setattr('webapp.beat.analyze_file', fake_beats)
+    sr = 22050; t = np.arange(sr * 2) / sr
+    buffer = io.BytesIO(); sf.write(buffer, .2 * np.sin(2 * np.pi * 440 * t), sr, format='WAV')
+    options = {'ai_assist': True, 'ai_align': True}
+    response = client.post('/api/jobs', files={'file': ('ai.wav', buffer.getvalue(), 'audio/wav')}, data={'options': json.dumps(options)}, headers=headers)
+    assert response.status_code == 202
+    job_id = response.json()['id']
+    for _ in range(400):
+        job = client.get(f'/api/jobs/{job_id}').json()
+        if job['status'] in {'completed', 'failed'}: break
+        time.sleep(.05)
+    assert job['status'] == 'completed', job
+    assert job['result']['ai']['model'] == 'beat-this-small0'
+    assert job['result']['tempo'] == 120
+    assert job['result']['ai_aligned_notes'] == 2
+    notes = client.get(f'/api/jobs/{job_id}/notes').json()['notes']
+    assert notes[0]['start'] == 0 and notes[1]['start'] == .5
+    # Refining with AI Assist reuses the local model path and creates a new version.
+    refined = client.post(f'/api/jobs/{job_id}/refine', json={'options': {**options, 'transpose': 2}}, headers=headers)
+    assert refined.status_code == 202
+    new_id = refined.json()['id']
+    for _ in range(400):
+        result = client.get(f'/api/jobs/{new_id}').json()
+        if result['status'] in {'completed', 'failed'}: break
+        time.sleep(.05)
+    assert result['status'] == 'completed', result
+    assert result['result']['ai']['beat_count'] == 4
+    assert {n['pitch'] for n in client.get(f'/api/jobs/{new_id}/notes').json()['notes']} == {62, 66}
+
+
 def test_unsupported_upload_and_invalid_youtube_are_actionable(api):
     client, _ = api
     client.get('/api/session'); headers = {'X-MIDICon-Client': 'web'}

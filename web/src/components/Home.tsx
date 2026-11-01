@@ -18,6 +18,7 @@ export function Home({ browserMode, busy, completedCount, recent, onStudio, onDe
   const features = [
     { icon: LockKeyhole, title: browserMode ? 'Private by default' : 'A workspace of your own', text: browserMode ? 'Audio is decoded and transcribed inside this browser. Nothing is uploaded to a MIDICon server.' : 'A private browser session keeps your conversions separate, with server-side retention you control.' },
     { icon: AudioLines, title: 'Real neural listening', text: browserMode ? 'The piano specialist and Basic Pitch run locally through WebAssembly, finding precise onsets, offsets, and dynamics.' : 'Choose the piano specialist or polyphonic Basic Pitch, with real progress at every stage.' },
+    { icon: Sparkles, title: 'Optional AI Assist', text: 'A free local Beat This! model finds the beat grid, sharpens tempo, and can gently align timing. You choose when it runs.' },
     { icon: SlidersHorizontal, title: 'A canvas, not a cage', text: 'Edit the piano roll, save new versions, transpose, quantize, and refine without starting over.' },
     { icon: FolderOpen, title: 'Ready for your DAW', text: 'Export standard MIDI, note JSON, CSV, or a complete ZIP. Take your whole library with you.' },
   ];

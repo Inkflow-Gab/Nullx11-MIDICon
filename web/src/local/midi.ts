@@ -1,5 +1,5 @@
 import { zipSync, strToU8 } from 'fflate';
-import type { Job, Note, Options } from '../types';
+import type { AiAnalysis, Job, Note, Options } from '../types';
 import { DEFAULT_OPTIONS } from '../types';
 
 const clamp = (value: unknown, min: number, max: number, fallback: number) => typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
@@ -13,10 +13,32 @@ export function safeOptions(input: Partial<Options> = {}): Options {
     tempo: o.tempo == null ? null : clamp(o.tempo, 40, 240, 120), start_seconds: clamp(o.start_seconds, 0, 3600, 0),
     duration_seconds: o.duration_seconds == null ? null : clamp(o.duration_seconds, 0.2, 600, 90),
     sustain: !!o.sustain, preserve_dynamics: !!o.preserve_dynamics, split_tracks: !!o.split_tracks, piano_range: !!o.piano_range,
+    ai_assist: !!o.ai_assist, ai_align: !!o.ai_assist && !!o.ai_align,
   };
 }
 
-export function refineNotes(raw: Note[], options: Options, tempo: number) {
+export function alignNotesToGrid(notes: Note[], ai: AiAnalysis, tolerance = 0.085): { notes: Note[]; moved: number } {
+  const interval = ai.beat_interval;
+  if (!ai.beats.length || !interval || interval <= 0) return { notes, moved: 0 };
+  const step = interval / 2;
+  const first = ai.beats[0];
+  const last = Math.max(ai.beats[ai.beats.length - 1], ...notes.map(note => note.end)) + step;
+  const grid: number[] = [];
+  for (let time = first; time <= last + 1e-6; time += step) grid.push(time);
+  let moved = 0;
+  const adjusted = notes.map(note => {
+    let best = grid[0], distance = Math.abs(note.start - best);
+    for (const time of grid) { const d = Math.abs(note.start - time); if (d < distance) { distance = d; best = time; } }
+    const delta = best - note.start;
+    if (Math.abs(delta) > tolerance || best < 0) return note;
+    if (Math.abs(delta) > 1e-9) moved++;
+    const duration = note.end - note.start;
+    return { ...note, start: Math.round(best * 1e5) / 1e5, end: Math.round(Math.max(best + 0.005, best + duration) * 1e5) / 1e5 };
+  });
+  return { notes: adjusted, moved };
+}
+
+export function refineNotes(raw: Note[], options: Options, tempo: number, ai?: AiAnalysis | null) {
   const profile = options.cleanup || 'balanced';
   const minimum = Math.max(options.min_duration_ms, profile === 'clean' ? 60 : 0) / 1000;
   const gap = Math.max(options.merge_gap_ms, profile === 'clean' ? 35 : 0) / 1000;
@@ -58,8 +80,10 @@ export function refineNotes(raw: Note[], options: Options, tempo: number) {
   }
   previous = undefined;
   for (const note of cleaned) { if (previous?.pitch === note.pitch) previous.end = Math.min(previous.end, Math.max(previous.start + 0.005, note.start - 0.003)); previous = note; }
-  const result = cleaned.filter(note => note.end - note.start >= 0.005).sort((a, b) => a.start - b.start || a.pitch - b.pitch).map(note => ({ ...note, start: Math.round(note.start * 1e5) / 1e5, end: Math.round(note.end * 1e5) / 1e5 }));
-  return { notes: result, stats: { raw_note_count: raw.length, merged_notes: mergeCount, filtered_notes: raw.length - result.length, note_count: result.length } };
+  let result = cleaned.filter(note => note.end - note.start >= 0.005).sort((a, b) => a.start - b.start || a.pitch - b.pitch).map(note => ({ ...note, start: Math.round(note.start * 1e5) / 1e5, end: Math.round(note.end * 1e5) / 1e5 }));
+  let aligned = 0;
+  if (ai && options.ai_align) { const polish = alignNotesToGrid(result, ai); result = polish.notes.sort((a, b) => a.start - b.start || a.pitch - b.pitch); aligned = polish.moved; }
+  return { notes: result, stats: { raw_note_count: raw.length, merged_notes: mergeCount, filtered_notes: raw.length - result.length, note_count: result.length, ...(ai ? { ai_aligned_notes: aligned } : {}) } };
 }
 
 export function normalizeEdits(raw: Note[]): Note[] {
@@ -111,7 +135,7 @@ export function packageZip(job: Job, notes: Note[], midi: Uint8Array) {
   return zipSync({
     [`${stem}.mid`]: midi, [`${stem}.json`]: strToU8(notesJson(notes)), [`${stem}.csv`]: strToU8(notesCsv(notes)),
     'transcription-settings.json': strToU8(JSON.stringify({ options: job.options, result: job.result }, null, 2)),
-    'README.txt': strToU8('Nullx MIDICon\nAutomatic transcription is an estimate, not a verified score. Tempo/key are estimates; meter defaults to 4/4. Upper/lower tracks split at C4, not by hand.\nModel: Spotify Basic Pitch, Apache-2.0. See https://github.com/spotify/basic-pitch.\n'),
+    'README.txt': strToU8(`Nullx MIDICon\nAutomatic transcription is an estimate, not a verified score. Tempo/key are estimates; meter defaults to 4/4 unless AI Assist reports a 3/4 or 4/4 estimate. Upper/lower tracks split at C4, not by hand.\nTranscription models: Kong piano specialist (CC BY 4.0) and/or Spotify Basic Pitch (Apache-2.0).\n${job.result?.ai ? 'AI Assist: Beat This! small0 (MIT), run locally for beat/downbeat analysis. https://github.com/CPJKU/beat_this\n' : ''}`),
   }, { level: 6 });
 }
 export function libraryZip(jobs: Job[], records: { notes: Note[]; midi: Uint8Array }[]) {

@@ -1,8 +1,9 @@
 import { DEFAULT_OPTIONS, isActive } from '../types';
-import type { Job, Note, Options, Result, Session } from '../types';
+import type { AiAnalysis, Job, Note, Options, Result, Session } from '../types';
 import { BROWSER_EXTENSIONS, BROWSER_MAX_BYTES, BROWSER_MAX_SECONDS, decodeAudio } from './decode';
 import { browserEngineName, resolveBrowserEngine } from './engines';
-import { estimateKey } from './notes';
+import { estimateKey, SAMPLE_RATE } from './notes';
+import { PIANO_SAMPLE_RATE } from './piano';
 import { exportMidi, libraryZip, normalizeEdits, notesCsv, notesJson, packageZip, refineNotes, safeOptions } from './midi';
 
 type LocalRecord = Job & { audio: Blob; rawNotes: Note[]; notes: Note[]; midi: Uint8Array; sourceDuration: number; sourceTempo: number };
@@ -11,7 +12,8 @@ const cache = new Map<string, LocalRecord>();
 const urls = new Map<string, string>();
 const listeners = new Set<() => void>();
 const cancelled = new Set<string>();
-let active: { id: string; worker?: Worker; reject?: (reason: Error) => void } | null = null;
+type ActiveController = { id: string; worker?: Worker; reject?: (reason: Error) => void };
+let active: ActiveController | null = null;
 let initialization: Promise<void> | null = null;
 let database: IDBDatabase | null = null;
 
@@ -105,21 +107,24 @@ async function run(id: string) {
     await update(id, { status: 'preparing', progress: 12, stage: 'Preparing your audio', detail: 'Decoding and resampling entirely on this device' });
     const decoded = await decodeAudio(record.audio, record.options); checkCancelled(id);
     await update(id, { progress: 28, waveform: decoded.waveform, has_audio: true, sourceDuration: decoded.duration, detail: `${decoded.duration.toFixed(1)} seconds prepared · loading the browser model` });
-    const raw = await new Promise<{ notes: Note[]; tempo: number }>((resolve, reject) => {
+    const raw = await new Promise<{ notes: Note[]; tempo: number; ai: AiAnalysis | null; aiError: string | null }>((resolve, reject) => {
       const worker = new Worker(new URL('./transcription.worker.ts', import.meta.url), { type: 'module' });
       controller.worker = worker; controller.reject = reject;
       worker.onmessage = event => {
         const message = event.data;
-        if (message.type === 'progress') void update(id, { status: 'transcribing', progress: 31 + message.value * 56, stage: 'Listening for every note', detail: message.detail }).catch(reject);
-        else if (message.type === 'complete') { worker.terminate(); controller.worker = undefined; resolve({ notes: message.notes, tempo: message.tempo }); }
+        if (message.type === 'progress') {
+          if (message.ai) void update(id, { status: 'refining', progress: 87 + message.value * 3, stage: 'AI Assist · beat tracking', detail: message.detail }).catch(reject);
+          else void update(id, { status: 'transcribing', progress: 31 + message.value * 56, stage: 'Listening for every note', detail: message.detail }).catch(reject);
+        }
+        else if (message.type === 'complete') { worker.terminate(); controller.worker = undefined; resolve({ notes: message.notes, tempo: message.tempo, ai: message.ai || null, aiError: message.aiError || null }); }
         else if (message.type === 'error') { worker.terminate(); controller.worker = undefined; reject(new Error(message.message)); }
       };
       worker.onerror = () => { worker.terminate(); reject(new Error('The browser engine could not start. Use an up-to-date Chrome, Edge, Firefox, or Safari with WebAssembly enabled.')); };
-      worker.postMessage({ audio: decoded.audio, sensitivity: record.options.sensitivity, base: new URL(import.meta.env.BASE_URL, window.location.href).href, engine: resolveBrowserEngine(record.options.engine) }, [decoded.audio.buffer]);
+      worker.postMessage({ audio: decoded.audio, sensitivity: record.options.sensitivity, base: new URL(import.meta.env.BASE_URL, window.location.href).href, engine: resolveBrowserEngine(record.options.engine), ai_assist: record.options.ai_assist }, [decoded.audio.buffer]);
     });
     checkCancelled(id);
-    await update(id, { rawNotes: raw.notes, sourceTempo: raw.tempo });
-    await finishRefinement(id, record.options, raw.notes, decoded.duration, raw.tempo, false);
+    await update(id, { rawNotes: raw.notes, sourceTempo: raw.ai?.tempo || raw.tempo });
+    await finishRefinement(id, record.options, raw.notes, decoded.duration, raw.tempo, false, raw.ai, raw.aiError);
   } catch (error) {
     try {
       if (cancelled.has(id) || (error instanceof DOMException && error.name === 'AbortError')) await update(id, { status: 'cancelled', stage: 'Conversion cancelled', detail: 'Your audio is saved on this device. Retry whenever you’re ready.', error: null, completed_at: Date.now() / 1000 });
@@ -127,17 +132,17 @@ async function run(id: string) {
     } catch (storageError) { storageFailure(storageError); }
   } finally { controller.worker?.terminate(); if (active === controller) active = null; cancelled.delete(id); emit(); }
 }
-async function finishRefinement(id: string, options: Options, raw: Note[], duration: number, detectedTempo: number, refinement: boolean) {
-  await update(id, { status: 'refining', progress: 90, stage: 'Putting the notes together', detail: 'Cleaning boundaries, preserving chords, and estimating key' });
-  const tempo = options.tempo || detectedTempo;
-  const refined = refineNotes(raw, options, tempo);
+async function finishRefinement(id: string, options: Options, raw: Note[], duration: number, detectedTempo: number, refinement: boolean, ai?: AiAnalysis | null, aiError?: string | null) {
+  await update(id, { status: 'refining', progress: 90, stage: 'Putting the notes together', detail: ai ? 'AI beat grid loaded · cleaning boundaries and preserving chords' : 'Cleaning boundaries, preserving chords, and estimating key' });
+  const tempo = options.tempo || ai?.tempo || detectedTempo;
+  const refined = refineNotes(raw, options, tempo, ai);
   if (!refined.notes.length) throw new Error('No confident notes were found. Try a cleaner recording, raise sensitivity, or shorten the shortest-note setting.');
   const current = cache.get(id)!;
   const engine = resolveBrowserEngine(options.engine);
-  const result: Result = { ...refined.stats, duration, tempo, key: estimateKey(refined.notes), engine, engine_name: browserEngineName(engine), lowest_pitch: Math.min(...refined.notes.map(note => note.pitch)), highest_pitch: Math.max(...refined.notes.map(note => note.pitch)), tempo_is_estimate: !options.tempo, key_is_estimate: true, meter: '4/4 (export default)', pedal_detected: false };
+  const result: Result = { ...refined.stats, duration, tempo, key: estimateKey(refined.notes), engine, engine_name: browserEngineName(engine), lowest_pitch: Math.min(...refined.notes.map(note => note.pitch)), highest_pitch: Math.max(...refined.notes.map(note => note.pitch)), tempo_is_estimate: !options.tempo, key_is_estimate: true, meter: ai?.meter ? `${ai.meter}/4 (AI estimate)` : '4/4 (export default)', pedal_detected: false, ai: ai ? { ...ai, aligned_notes: refined.stats.ai_aligned_notes || 0 } : null, ai_error: aiError || null };
   const midi = exportMidi(refined.notes, tempo, options, current.title);
   checkCancelled(id);
-  await update(id, { status: 'completed', progress: 100, stage: 'Your MIDI is ready', detail: refinement ? 'Refined without running the model again' : 'Created privately on this device', result, notes: refined.notes, midi, waveform: current.waveform, has_audio: true, completed_at: Date.now() / 1000, error: null });
+  await update(id, { status: 'completed', progress: 100, stage: 'Your MIDI is ready', detail: aiError ? `AI Assist unavailable · standard conversion kept. ${aiError}` : ai ? `AI Assist applied · ${ai.beat_count} beats detected${refined.stats.ai_aligned_notes ? ` · ${refined.stats.ai_aligned_notes} notes gently aligned` : ''}` : refinement ? 'Refined without running the model again' : 'Created privately on this device', result, notes: refined.notes, midi, waveform: current.waveform, has_audio: true, completed_at: Date.now() / 1000, error: null });
 }
 export async function browserJobs() { await ready(); return [...cache.values()].sort((a, b) => b.created_at - a.created_at).map(publicJob); }
 export async function browserNotes(id: string) { await ready(); const record = cache.get(id); if (!record || record.status !== 'completed') throw new Error('The notes are not ready yet.'); return record.notes; }
@@ -169,15 +174,57 @@ export async function browserRefine(id: string, options: Options) {
   options = safeOptions(options);
   if (resolveBrowserEngine(options.engine) !== resolveBrowserEngine(source.options.engine)) throw new Error('Refine reuses the original analysis. To switch engines, use Retry so the audio is re-analyzed.');
   options.start_seconds = source.options.start_seconds; options.duration_seconds = source.options.duration_seconds;
+  if (options.ai_assist && !source.result?.ai) return browserAiAssist(id, options.ai_align);
   await capacity(source.audio.size);
   const now = Date.now() / 1000;
   const record: LocalRecord = { ...source, id: crypto.randomUUID(), title: source.title.replace(/ · refined$/, '').slice(0, 145) + ' · refined', source_type: 'refined', options, status: 'refining', progress: 90, stage: 'Applying your note settings', detail: 'Reusing the original browser analysis', result: null, favorite: false, created_at: now, updated_at: now, completed_at: now, error: null, notes: [], midi: new Uint8Array() };
   await write(record); cache.set(record.id, record); emit();
-  try { await finishRefinement(record.id, options, source.rawNotes, source.sourceDuration, source.sourceTempo, true); }
+  const ai = options.ai_assist ? source.result?.ai || null : null;
+  try { await finishRefinement(record.id, options, source.rawNotes, source.sourceDuration, source.sourceTempo, true, ai); }
   catch (error) {
     try { await update(record.id, { status: 'failed', error: error instanceof Error ? error.message : 'Refinement failed.', stage: 'Refinement needs another take' }); }
     catch (storageError) { storageFailure(storageError); }
   }
+  return publicJob(cache.get(record.id)!);
+}
+function runBeatWorker(audio: Float32Array, sampleRate: number, controller: ActiveController, onProgress: (value: number, detail: string) => void): Promise<AiAnalysis | null> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('./transcription.worker.ts', import.meta.url), { type: 'module' });
+    controller.worker = worker; controller.reject = reject;
+    worker.onmessage = event => {
+      const message = event.data;
+      if (message.type === 'progress') onProgress(message.value, message.detail);
+      else if (message.type === 'beats-complete') { worker.terminate(); controller.worker = undefined; resolve(message.ai || null); }
+      else if (message.type === 'error') { worker.terminate(); controller.worker = undefined; reject(new Error(message.message)); }
+    };
+    worker.onerror = () => { worker.terminate(); reject(new Error('AI Assist could not start. Use an up-to-date browser with WebAssembly enabled.')); };
+    worker.postMessage({ type: 'beats', audio, sampleRate, base: new URL(import.meta.env.BASE_URL, window.location.href).href }, [audio.buffer]);
+  });
+}
+export async function browserAiAssist(id: string, align = true) {
+  await ready(); if (active) throw new Error('Let the current conversion finish first.');
+  const source = cache.get(id);
+  if (!source || source.status !== 'completed') throw new Error('Only completed conversions can use AI Assist.');
+  const options = safeOptions({ ...source.options, ai_assist: true, ai_align: align });
+  await capacity(source.audio.size);
+  const now = Date.now() / 1000;
+  const record: LocalRecord = { ...source, id: crypto.randomUUID(), title: source.title.replace(/ · (refined|edited|AI assist)$/, '').slice(0, 145) + ' · AI assist', source_type: 'refined', options, status: 'refining', progress: 80, stage: 'AI Assist · loading the local beat model', detail: 'Beat This! small0 runs on this device; your audio is not uploaded', result: null, favorite: false, created_at: now, updated_at: now, completed_at: now, error: null, notes: [], midi: new Uint8Array() };
+  await write(record); cache.set(record.id, record); emit();
+  const controller: ActiveController = { id: record.id }; active = controller; cancelled.delete(record.id);
+  try {
+    const decoded = await decodeAudio(source.audio, options); checkCancelled(record.id);
+    const sampleRate = resolveBrowserEngine(options.engine) === 'piano' ? PIANO_SAMPLE_RATE : SAMPLE_RATE;
+    const ai = await runBeatWorker(decoded.audio, sampleRate, controller, (value, detail) => { void update(record.id, { progress: 80 + value * 12, stage: 'AI Assist · beat tracking', detail }).catch(() => {}); });
+    checkCancelled(record.id);
+    if (!ai) throw new Error('AI Assist could not find a steady beat. Try a longer or more rhythmic clip, or keep the original result.');
+    await update(record.id, { sourceTempo: ai.tempo || source.sourceTempo });
+    await finishRefinement(record.id, options, source.rawNotes, source.sourceDuration, source.sourceTempo, true, ai);
+  } catch (error) {
+    try {
+      if (cancelled.has(record.id) || (error instanceof DOMException && error.name === 'AbortError')) await update(record.id, { status: 'cancelled', stage: 'AI Assist cancelled', detail: 'Your original conversion is unchanged.', error: null, completed_at: Date.now() / 1000 });
+      else await update(record.id, { status: 'failed', error: error instanceof Error ? error.message : 'AI Assist failed.', stage: 'AI Assist needs another take' });
+    } catch (storageError) { storageFailure(storageError); }
+  } finally { controller.worker?.terminate(); if (active === controller) active = null; cancelled.delete(record.id); emit(); }
   return publicJob(cache.get(record.id)!);
 }
 export async function browserSaveEdit(id: string, raw: Note[], title?: string) {

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Check, Copy, MousePointer2, Redo2, Save, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Copy, MousePointer2, Redo2, Save, Sparkles, Trash2, Undo2, X } from 'lucide-react';
 import type { Note } from '../types';
 import { noteName } from '../types';
 
@@ -8,10 +8,11 @@ type Props = {
   onUndo: () => void; onRedo: () => void; onSelectAll: () => void; onClearSelection: () => void;
   onDeleteSelected: () => void; onVelocity: (velocity: number) => void;
   onNudge: (dt: number, dp: number) => void; onDuplicate: () => void;
+  onAiSnap?: () => void; aiAvailable?: boolean;
   onSave: () => void; onCancel: () => void;
 };
 
-export function EditorPanel({ notes, selectedIds, dirty, busy, canUndo, canRedo, onUndo, onRedo, onSelectAll, onClearSelection, onDeleteSelected, onVelocity, onNudge, onDuplicate, onSave, onCancel }: Props) {
+export function EditorPanel({ notes, selectedIds, dirty, busy, canUndo, canRedo, onUndo, onRedo, onSelectAll, onClearSelection, onDeleteSelected, onVelocity, onNudge, onDuplicate, onAiSnap, aiAvailable, onSave, onCancel }: Props) {
   const selected = notes.filter(note => note.id && selectedIds.has(note.id));
   const velocity = selected.length ? Math.round(selected.reduce((sum, note) => sum + note.velocity, 0) / selected.length) : 80;
   const summary = selected.length === 0 ? 'Click a note to select · drag to move · double-click empty space to add.' : selected.length === 1 ? `${noteName(selected[0].pitch)} · ${selected[0].start.toFixed(2)}s · velocity ${selected[0].velocity}` : `${selected.length} notes selected · average velocity ${velocity}`;
@@ -25,6 +26,7 @@ export function EditorPanel({ notes, selectedIds, dirty, busy, canUndo, canRedo,
       <button className="text-button" disabled={busy || !hasSelection} onClick={() => onNudge(-0.05, 0)}>← Earlier</button>
       <button className="text-button" disabled={busy || !hasSelection} onClick={() => onNudge(0.05, 0)}>Later →</button>
       <button className="text-button" disabled={busy || !hasSelection} onClick={onDuplicate}><Copy size={13} />Duplicate</button>
+      {onAiSnap && <button className="text-button ai-snap-button" disabled={busy || !aiAvailable || notes.length === 0} onClick={onAiSnap} title={aiAvailable ? 'Gently snap all notes to the AI beat grid' : 'Run AI Assist first to detect a beat grid'}><Sparkles size={13} />AI snap</button>}
       <span className="editor-shortcuts">Arrows nudge · Shift+↑/↓ octave · Ctrl/⌘+D duplicate · Del remove</span>
     </div>
     <div className="editor-footer"><span>{notes.length} notes {dirty ? '· unsaved changes' : '· no changes yet'}</span><div><button className="button secondary small" disabled={busy} onClick={onCancel}><X size={13} />Cancel</button><button className="button primary small" disabled={busy || !dirty || notes.length === 0} onClick={onSave}>{busy ? <Check size={13} /> : <Save size={13} />}Save as new version</button></div></div>

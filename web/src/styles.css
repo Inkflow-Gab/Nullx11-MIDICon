@@ -141,3 +141,46 @@ body{color:#28223a}
 .player-rate{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .player-rate select{min-height:30px;padding:2px 6px;border-radius:8px;border:1px solid var(--line);background:#fff;font:inherit;font-size:12px;letter-spacing:0;text-transform:none;color:var(--ink)}
 @media(max-width:620px){.editor-shortcuts{flex-basis:100%;margin-left:0}.player-rate{margin-left:0}.roll-edit-hint{display:none}}
+
+/* v1.4 · optional local AI Assist */
+.ai-assist-card{position:relative;overflow:hidden;padding:18px 18px 16px;border:1px solid var(--border);transition:border-color .2s,box-shadow .2s}
+.ai-assist-card.enabled{border-color:rgba(118,84,207,.38);box-shadow:0 0 0 1px rgba(118,84,207,.08),0 10px 28px rgba(91,63,160,.07)}
+.ai-assist-card.enabled::before{content:'';position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#7654cf,#bba6ee,#73b5ad)}
+.ai-assist-heading{display:flex;align-items:center;gap:11px}
+.ai-assist-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#f1ebff,#e7f4f1);color:#7654cf;flex:none}
+.ai-assist-heading h2{margin:0;font-size:15px;letter-spacing:-.01em}
+.ai-assist-sub{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.ai-switch{margin-left:auto;position:relative;width:42px;height:24px;border-radius:999px;border:1px solid var(--border);background:#ece8f3;cursor:pointer;transition:background .2s,border-color .2s;flex:none}
+.ai-switch i{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(40,30,60,.25);transition:transform .2s}
+.ai-switch.on{background:#7654cf;border-color:#7654cf}
+.ai-switch.on i{transform:translateX(18px)}
+.ai-switch:disabled{opacity:.55;cursor:not-allowed}
+.ai-assist-copy{margin:12px 0 10px;font-size:12.5px;line-height:1.55;color:var(--muted)}
+.ai-status{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;padding:7px 10px;border-radius:9px;background:#f5f3f9;color:#6d6478}
+.ai-status.ready{background:#f1ebff;color:#6a4fb3}
+.ai-status.downloading,.ai-status.running{background:#eef6f4;color:#3f7d72}
+.ai-status.applied{background:#edf7ef;color:#3f7d4f}
+.ai-status.error{background:#fdf0ee;color:#a4503f}
+.ai-assist-options{margin-top:12px;display:grid;gap:10px}
+.ai-align-toggle{display:flex;gap:9px;align-items:flex-start;cursor:pointer}
+.ai-align-toggle input{margin-top:3px;accent-color:#7654cf}
+.ai-align-toggle strong{display:block;font-size:12.5px}
+.ai-align-toggle small{display:block;font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px}
+.ai-model-note{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--muted)}
+.ai-result-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.ai-result-grid div{background:#f8f6fc;border:1px solid #eee8f7;border-radius:10px;padding:8px 9px}
+.ai-result-grid span{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.ai-result-grid strong{display:flex;align-items:baseline;gap:3px;font-size:16px;margin-top:2px}
+.ai-result-grid small{font-size:10px;color:var(--muted);font-weight:600}
+.ai-aligned-note{display:flex;align-items:center;gap:6px;margin:10px 0 0;font-size:11.5px;color:#6a4fb3}
+.ai-polish-button{margin-top:12px;width:100%;justify-content:center}
+.ai-topbar-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;background:#f1ebff;color:#6a4fb3;border:1px solid rgba(118,84,207,.2)}
+.ai-topbar-pill.running,.ai-topbar-pill.downloading{background:#eef6f4;color:#3f7d72}
+.ai-topbar-pill.applied{background:#edf7ef;color:#3f7d4f}
+.ai-result-badge{display:inline-flex;align-items:center;gap:5px;color:#6a4fb3;font-weight:600}
+.roll-ai-hint{color:#7654cf;font-style:normal}
+.roll-tools .icon-button.active{background:#f1ebff;color:#7654cf}
+.ai-snap-button{color:#6a4fb3}
+.guide-ai .guide-tips{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.guide-ai .guide-tips{grid-template-columns:1fr}.ai-result-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.ai-topbar-pill{display:none}.ai-assist-card{padding:15px}.ai-assist-copy{font-size:12px}}

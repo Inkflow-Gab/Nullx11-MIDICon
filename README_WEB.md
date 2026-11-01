@@ -14,8 +14,10 @@ The same frontend detects which mode is available. GitHub Pages cannot execute t
 - **Two real neural engines:**
   - **Piano specialist** — Kong et al. high-resolution note-only ONNX model, 50% overlapping context windows cross-faded before decoding.
   - **Polyphonic** — Spotify Basic Pitch ONNX model for instrument-agnostic input, mapped to piano.
+- **AI Assist model:** Beat This! small0 (Foscarin, Schlüter & Widmer, ISMIR 2024), Institute of Computational Perception, JKU Linz. Code and weights MIT. The pinned ONNX mirror is checksum-verified by `scripts/setup_beat_model.py` and `web/scripts/prepare-beat-assets.mjs`.
 - **Live job progress:** queued → downloading/preparing → transcribing window-by-window → refining → ready, over Server-Sent Events with polling fallback. Cancel and retry are supported.
 - **Playable + editable piano roll:** zoom/seek, upper/lower register colors, synthesized piano preview, original-audio comparison, volume and keyboard spacebar playback. In edit mode you can click/shift-click notes, select all, delete selected notes, adjust velocity, undo/redo, and save the result as a new version. The original conversion stays unchanged.
+- **Optional local AI Assist:** a real pretrained **Beat This! small0** beat/downbeat model (MIT, ~10 MB ONNX) runs on the same device/server as the studio. It is off by default, shows an honest status indicator, improves the tempo estimate, draws a beat/downbeat grid on the piano roll, and can gently align notes already close to the grid. “Polish this result with AI” saves a new assisted version while keeping the original. If the model cannot run or no steady beat is found, the standard conversion is kept. It does not upload audio to a paid AI service and does not train on user music.
 - **Adjustable output:** sensitivity, shortest note, repeated-note gap merging, transpose, quantization grid, tempo override, dynamics, sustain smoothing, piano-range filtering, single/two-track MIDI.
 - **Refine without re-uploading:** reuses the stored neural analysis and source audio.
 - **Downloads:** MIDI, JSON note events, CSV, or a ZIP with MIDI + notes + settings + attribution. The library can also export all completed MIDI files in one ZIP with note JSON and a manifest.
@@ -44,7 +46,7 @@ Browser-mode limits and guarantees:
 - Piano-roll editing: drag to move, drag edges to resize, double-click to add, multi-select, octave/nudge/duplicate tools, velocity, undo/redo, and save-as-new-version. Practice playback at 0.5×–1.25×.
 - One active conversion at a time; up to 40 stored local jobs.
 - Audio/results live in this browser’s IndexedDB on this device. They are not synced, and clearing site data can remove them.
-- The first piano conversion downloads about 85 MB of piano-specialist weights plus ONNX Runtime WASM; Basic Pitch is a smaller alternative. The service worker caches models and runtime for offline reuse. The piano model is fetched on demand, not precached on first page load.
+- The first piano conversion downloads about 85 MB of piano-specialist weights plus ONNX Runtime WASM; Basic Pitch is a smaller alternative. Optional AI Assist downloads a separate ~10 MB Beat This! small0 model only when enabled. The service worker caches models and runtime for offline reuse. Heavy models are fetched on demand, not precached on first page load.
 - MIDI, JSON, CSV, per-job ZIP, editing/versioning, refinement, favorites, rename, delete, and library ZIP all run locally.
 
 To force browser mode on any host for testing, append `?mode=browser`. To force the backend mode, append `?mode=server`.
@@ -56,7 +58,7 @@ Requirements: Python 3.11+, Node.js 22+, and network access to PyPI/npm/GitHub f
 ```bash
 python3.11 -m venv .venv
 .venv/bin/pip install -r requirements-web.lock
-.venv/bin/python scripts/setup_web_models.py   # pinned ~85 MB piano ONNX mirror, checksum verified
+.venv/bin/python scripts/setup_web_models.py   # pinned ~85 MB piano ONNX + ~10 MB AI Assist model, checksum verified
 (cd web && npm ci && npm run build)
 bash scripts/run_web.sh                        # http://localhost:3000
 ```

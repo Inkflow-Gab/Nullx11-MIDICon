@@ -33,7 +33,7 @@ def estimate_music(audio_path: Path, notes: list[dict]) -> tuple[float, str]:
     return round(bpm, 1), max(scores)[1]
 
 
-def refine_notes(raw_notes: list[dict], options: TranscriptionOptions, tempo: float) -> tuple[list[dict], dict]:
+def refine_notes(raw_notes: list[dict], options: TranscriptionOptions, tempo: float, ai: dict | None = None) -> tuple[list[dict], dict]:
     original_count = len(raw_notes)
     notes = []
     for source in raw_notes:
@@ -109,7 +109,15 @@ def refine_notes(raw_notes: list[dict], options: TranscriptionOptions, tempo: fl
     for note in merged:
         for key in ("start", "end"):
             note[key] = round(note[key], 5)
+    aligned = 0
+    if ai and getattr(options, "ai_align", False):
+        from .beat import align_notes_to_grid
+
+        merged, aligned = align_notes_to_grid(merged, ai)
+        merged.sort(key=lambda note: (note["start"], note["pitch"]))
     stats = {"raw_note_count": original_count, "merged_notes": merge_count, "filtered_notes": original_count - len(merged), "note_count": len(merged)}
+    if ai:
+        stats["ai_aligned_notes"] = aligned
     return merged, stats
 
 
@@ -178,10 +186,13 @@ def normalize_edited_notes(raw_notes: list[dict]) -> list[dict]:
     return cleaned
 
 
-def result_metadata(notes: list[dict], duration: float, tempo: float, key: str, engine: str, stats: dict) -> dict:
+def result_metadata(notes: list[dict], duration: float, tempo: float, key: str, engine: str, stats: dict, ai: dict | None = None) -> dict:
+    meter = "4/4 (export default)"
+    if ai and ai.get("meter"):
+        meter = f"{ai['meter']}/4 (AI estimate)"
     return {**stats, "duration": round(duration, 3), "tempo": round(tempo, 1), "key": key, "engine": engine,
         "engine_name": "Piano specialist" if engine == "piano" else "Basic Pitch",
         "lowest_pitch": min((note["pitch"] for note in notes), default=None),
         "highest_pitch": max((note["pitch"] for note in notes), default=None),
         "tempo_is_estimate": True, "key_is_estimate": True,
-        "meter": "4/4 (export default)", "pedal_detected": False}
+        "meter": meter, "pedal_detected": False, "ai": ai}
