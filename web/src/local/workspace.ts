@@ -15,7 +15,7 @@ let initialization: Promise<void> | null = null;
 let database: IDBDatabase | null = null;
 
 export const browserSession: Session = {
-  workspace_id: 'this-device', retention_days: 0, max_upload_mb: 25, max_duration_seconds: BROWSER_MAX_SECONDS, max_jobs: 40,
+  workspace_id: 'this-device', retention_days: 0, max_upload_mb: 100, max_duration_seconds: BROWSER_MAX_SECONDS, max_jobs: 40,
   engines: [{ id: 'basic', name: 'Basic Pitch · browser', description: 'Spotify Basic Pitch · runs privately on this device', ready: true }],
   extensions: BROWSER_EXTENSIONS, scope: 'device', authentication: 'local-device',
 };
@@ -89,7 +89,7 @@ async function create(file: Blob, title: string, sourceType: Job['source_type'],
   if (options.engine === 'piano') throw new Error('The piano specialist needs the full server. Browser mode uses Basic Pitch; choose Auto or Polyphonic.');
   if (active) throw new Error('Let the current browser conversion finish or cancel it first.');
   if (cache.size >= browserSession.max_jobs) throw new Error('Your device library is full. Download and delete an older conversion first.');
-  if (file.size > BROWSER_MAX_BYTES || file.size < 32) throw new Error('Choose a nonempty audio file smaller than 25 MB.');
+  if (file.size > BROWSER_MAX_BYTES || file.size < 32) throw new Error('Choose a nonempty audio file smaller than 100 MB.');
   await capacity(file.size);
   const now = Date.now() / 1000;
   const record: LocalRecord = { id: crypto.randomUUID(), title: title.slice(0, 160), source_type: sourceType, source_url: '', source_name: file instanceof File ? file.name : 'little-steps.wav', status: 'queued', progress: 0, stage: 'Starting on this device', detail: 'Your audio stays in this browser', error: null, options, result: null, waveform: null, events: [{ time: now, message: 'Added to this device’s queue' }], favorite: false, created_at: now, updated_at: now, completed_at: null, has_audio: false, queue_position: 1, audio: file, rawNotes: [], notes: [], midi: new Uint8Array(), sourceDuration: 0, sourceTempo: 120 };

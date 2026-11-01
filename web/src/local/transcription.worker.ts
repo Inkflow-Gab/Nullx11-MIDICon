@@ -47,7 +47,10 @@ async function transcribe(audio: Float32Array, sensitivity: number, base: string
     onsets.set(onset.subarray(TRIM * 88, (FRAME_COUNT - TRIM) * 88), index * UNWRAPPED_FRAMES * 88);
     for (const value of Object.values(output)) value.dispose();
     input.dispose();
-    progress((index + 1) / windows, `Listening in your browser · window ${index + 1} of ${windows}`);
+    const heard = Math.min(audio.length / SAMPLE_RATE, (index + 1) * UNWRAPPED_FRAMES * FFT_HOP / SAMPLE_RATE);
+    const total = audio.length / SAMPLE_RATE;
+    const clock = (value: number) => `${Math.floor(value / 60)}:${Math.floor(value % 60).toString().padStart(2, '0')}`;
+    progress((index + 1) / windows, `Listening in your browser · ${clock(heard)} of ${clock(total)} · window ${index + 1}/${windows}`);
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   progress(0.96, 'Separating note onsets, sustain, and dynamics');
