@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Minus, Plus, ScanLine } from 'lucide-react';
+import { Grid3X3, Minus, Plus, ScanLine } from 'lucide-react';
 import type { Note } from '../types';
 import { noteName } from '../types';
 
@@ -8,11 +8,12 @@ type Props = {
   loading?: boolean; editable?: boolean; selectedIds?: Set<string>;
   onSelectNote?: (id: string | null, additive: boolean) => void;
   onChangeNotes?: (notes: Note[]) => void;
+  beats?: number[]; downbeats?: number[];
 };
 type Drag = { mode: 'move' | 'left' | 'right'; ids: Set<string>; startTime: number; startPitch: number; original: Note[]; moved: boolean };
 const DEMO: Note[] = Array.from({ length: 34 }, (_, i) => ({ start: (i % 12) * 0.62 + Math.floor(i / 12) * 0.18, end: (i % 12) * 0.62 + 0.35 + (i % 3) * 0.16, pitch: [60, 64, 67, 72, 67, 64, 57, 60, 64, 69, 64, 60][i % 12] + (i > 23 ? -12 : 0), velocity: 65 + i % 40 }));
 
-export function PianoRoll({ notes, duration, currentTime, onSeek, loading, editable = false, selectedIds, onSelectNote, onChangeNotes }: Props) {
+export function PianoRoll({ notes, duration, currentTime, onSeek, loading, editable = false, selectedIds, onSelectNote, onChangeNotes, beats, downbeats }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -22,6 +23,8 @@ export function PianoRoll({ notes, duration, currentTime, onSeek, loading, edita
   const [width, setWidth] = useState(500);
   const [zoom, setZoom] = useState(1);
   const [viewStart, setViewStart] = useState(0);
+  const [showBeatGrid, setShowBeatGrid] = useState(true);
+  const hasBeatGrid = !!beats?.length;
   const height = 248, keyboardHeight = 43, labelWidth = 32;
   const activeNotes = preview || notes;
   const empty = activeNotes.length === 0;
@@ -71,6 +74,18 @@ export function PianoRoll({ notes, duration, currentTime, onSeek, loading, edita
       ctx.fillStyle = '#aaa4b6'; ctx.font = '9px "DM Sans", sans-serif'; ctx.fillText(`${Math.floor(second / 60)}:${(second % 60).toString().padStart(2, '0')}`, x + 4, 15);
     }
     ctx.save(); ctx.beginPath(); ctx.rect(labelWidth, 24, plotWidth, plotHeight); ctx.clip();
+    if (hasBeatGrid && showBeatGrid) {
+      const down = new Set(downbeats || []);
+      const visibleEnd = start + plotWidth / scale;
+      for (const beat of beats!) {
+        if (beat < start - 0.05 || beat > visibleEnd + 0.05) continue;
+        const x = labelWidth + (beat - start) * scale;
+        const isDown = down.has(beat);
+        ctx.strokeStyle = isDown ? 'rgba(118,84,207,.34)' : 'rgba(118,84,207,.14)';
+        ctx.lineWidth = isDown ? 1.2 : 0.7;
+        ctx.beginPath(); ctx.moveTo(x, 24); ctx.lineTo(x, height - keyboardHeight); ctx.stroke();
+      }
+    }
     displayNotes.forEach((note, index) => {
       if (note.end < start || note.start > start + plotWidth / scale || note.pitch < lowest || note.pitch > highest) return;
       const x = labelWidth + (note.start - start) * scale;
@@ -114,7 +129,7 @@ export function PianoRoll({ notes, duration, currentTime, onSeek, loading, edita
       ctx.beginPath(); ctx.roundRect(x, keyY, keyWidth * 0.58, keyboardHeight * 0.62, [0, 0, 2, 2]); ctx.fill();
     }
     ctx.fillStyle = '#f5f3f9'; ctx.fillRect(0, keyY, labelWidth, keyboardHeight);
-  }, [width, displayNotes, activeNotes, notes, currentTime, start, scale, lowest, highest, empty, zoom, editable, selectedIds, rowHeight]);
+  }, [width, displayNotes, activeNotes, notes, currentTime, start, scale, lowest, highest, empty, zoom, editable, selectedIds, rowHeight, hasBeatGrid, showBeatGrid, beats, downbeats]);
 
   function point(event: React.PointerEvent<HTMLCanvasElement> | React.MouseEvent<HTMLCanvasElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -187,7 +202,7 @@ export function PianoRoll({ notes, duration, currentTime, onSeek, loading, edita
   }
 
   return <div className="piano-roll" ref={wrapperRef}>
-    <div className="roll-tools"><span><i className="legend-dot purple" /> Upper register <i className="legend-dot teal" /> Lower register{editable && <em className="roll-edit-hint"> · drag to move · edges resize · double-click adds</em>}</span><div><button className="icon-button tiny" aria-label="Zoom out" disabled={zoom <= 1} onClick={() => setZoom(z => Math.max(1, z - 0.5))}><Minus size={13} /></button><button className="icon-button tiny" aria-label="Fit piano roll" onClick={() => { setZoom(1); setViewStart(0); onSeek(0); }}><ScanLine size={13} /></button><button className="icon-button tiny" aria-label="Zoom in" disabled={zoom >= 4} onClick={() => setZoom(z => Math.min(4, z + 0.5))}><Plus size={13} /></button></div></div>
+    <div className="roll-tools"><span><i className="legend-dot purple" /> Upper register <i className="legend-dot teal" /> Lower register{hasBeatGrid && <em className="roll-ai-hint"> · AI beat grid</em>}{editable && <em className="roll-edit-hint"> · drag to move · edges resize · double-click adds</em>}</span><div>{hasBeatGrid && <button className={`icon-button tiny ${showBeatGrid ? 'active' : ''}`} aria-label="Toggle AI beat grid" aria-pressed={showBeatGrid} title="Toggle AI beat grid" onClick={() => setShowBeatGrid(value => !value)}><Grid3X3 size={13} /></button>}<button className="icon-button tiny" aria-label="Zoom out" disabled={zoom <= 1} onClick={() => setZoom(z => Math.max(1, z - 0.5))}><Minus size={13} /></button><button className="icon-button tiny" aria-label="Fit piano roll" onClick={() => { setZoom(1); setViewStart(0); onSeek(0); }}><ScanLine size={13} /></button><button className="icon-button tiny" aria-label="Zoom in" disabled={zoom >= 4} onClick={() => setZoom(z => Math.min(4, z + 0.5))}><Plus size={13} /></button></div></div>
     <div className="roll-canvas-wrap"><canvas ref={canvasRef} className={editable ? 'editable' : undefined} style={{ width: '100%', height, cursor: editable ? cursor : 'pointer', touchAction: editable ? 'none' : 'pan-y' }} aria-label={editable ? `Editable piano roll with ${notes.length} notes. Drag notes to move, drag edges to resize, double-click to add.` : empty ? 'Illustrative piano roll. Convert a song to see your actual notes.' : `Piano roll with ${notes.length} notes. Click to seek.`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onDoubleClick={handleDoubleClick} />
       {empty && <div className="roll-empty"><span className="roll-empty-icon"><ScanLine size={21} /></span><strong>{editable ? 'No notes left' : loading ? 'Finding your notes…' : 'A little sound. A whole new canvas.'}</strong><span>{editable ? 'Double-click to add a note, or undo to restore.' : loading ? 'Your piano roll is on its way.' : 'Your notes will come to life right here.'}</span></div>}
     </div>

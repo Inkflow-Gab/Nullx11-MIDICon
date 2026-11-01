@@ -1,5 +1,5 @@
 /* Cache only public application assets. Never cache API responses or upload bodies. */
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL_CACHE = `midicon-shell-${VERSION}`;
 const ASSET_CACHE = `midicon-assets-${VERSION}`;
 const BASE = new URL('./', self.location.href);

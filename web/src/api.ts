@@ -58,6 +58,11 @@ export async function createDemo(options: Options) { return await isBrowserWorks
 export async function cancelJob(id: string) { return await isBrowserWorkspace() ? local.browserCancel(id) : api<Job>(`/jobs/${id}/cancel`, { method: 'POST' }); }
 export async function retryJob(id: string, options?: Options) { return await isBrowserWorkspace() ? local.browserRetry(id, options) : api<Job>(`/jobs/${id}/retry`, { method: 'POST', ...(options ? { body: JSON.stringify(options) } : {}) }); }
 export async function refineJob(id: string, options: Options) { return await isBrowserWorkspace() ? local.browserRefine(id, options) : api<Job>(`/jobs/${id}/refine`, { method: 'POST', body: JSON.stringify({ options }) }); }
+export async function aiAssistJob(id: string, align = true) {
+  if (await isBrowserWorkspace()) return local.browserAiAssist(id, align);
+  const job = await api<Job>(`/jobs/${id}`);
+  return api<Job>(`/jobs/${id}/refine`, { method: 'POST', body: JSON.stringify({ options: { ...job.options, ai_assist: true, ai_align: align } }) });
+}
 export async function patchJob(id: string, values: { title?: string; favorite?: boolean }) { return await isBrowserWorkspace() ? local.browserPatch(id, values) : api<Job>(`/jobs/${id}`, { method: 'PATCH', body: JSON.stringify(values) }); }
 export async function deleteJob(id: string) { if (await isBrowserWorkspace()) return local.browserDelete(id); return api<void>(`/jobs/${id}`, { method: 'DELETE' }); }
 export async function clearHistory() { return await isBrowserWorkspace() ? local.browserClear() : api<{ deleted: number }>('/history', { method: 'DELETE' }); }

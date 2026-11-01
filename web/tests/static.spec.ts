@@ -121,6 +121,39 @@ test('static subpath: long clip can be cancelled without losing the input', asyn
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
 });
 
+test('static subpath: optional AI Assist runs the local beat model and exposes an editable beat grid', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('./?mode=browser#studio');
+  await page.getByLabel('Transcription engine').selectOption('basic');
+  await page.getByRole('switch', { name: 'Enable AI Assist' }).click();
+  await expect(page.locator('.ai-assist-card')).toHaveClass(/enabled/);
+  await page.getByRole('button', { name: 'Try a demo', exact: true }).click();
+  await expect(page.getByRole('link', { name: /Download MIDI/ })).toBeVisible({ timeout: 240_000 });
+  await expect(page.locator('.ai-result-badge')).toContainText('AI beat grid');
+  await expect(page.locator('.ai-status.applied')).toContainText('Applied to this result');
+  const tempo = parseInt((await page.locator('.ai-result-grid div').first().locator('strong').innerText()).replace(/[^0-9]/g, ''), 10);
+  expect(tempo).toBeGreaterThan(80);
+  expect(tempo).toBeLessThan(115);
+  await expect(page.getByRole('button', { name: 'Toggle AI beat grid' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Toggle AI beat grid' }).click();
+  await expect(page.getByRole('button', { name: 'Toggle AI beat grid' })).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Edit notes', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'AI snap', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'AI snap', exact: true }).click();
+  await page.getByRole('button', { name: 'Save as new version' }).click();
+  await expect(page.locator('.preview-song strong')).toContainText('edited');
+  const cached = await page.evaluate(async () => {
+    for (const key of await caches.keys()) {
+      const cache = await caches.open(key);
+      if (await cache.match(new URL('models/beat-this/beat-this-small0.onnx', document.baseURI).href)) return true;
+    }
+    return false;
+  });
+  expect(cached).toBeTruthy();
+  expect(errors).toEqual([]);
+});
+
 test('static subpath: pages, server-only YouTube notice, and mobile layout', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./?mode=browser#home');

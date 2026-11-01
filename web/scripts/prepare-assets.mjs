@@ -23,3 +23,7 @@ if (process.env.MIDICON_PIANO_ASSETS !== '0') {
   const { preparePianoAssets } = await import('./prepare-piano-assets.mjs');
   await preparePianoAssets();
 }
+if (process.env.MIDICON_BEAT_ASSETS !== '0') {
+  const { prepareBeatAssets } = await import('./prepare-beat-assets.mjs');
+  await prepareBeatAssets();
+}

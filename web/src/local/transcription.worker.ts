@@ -1,16 +1,20 @@
 import * as ort from 'onnxruntime-web/wasm';
 import { decodeNotes, estimateTempo, FFT_HOP, FRAME_COUNT, OVERLAP, SAMPLE_RATE, STRIDE, TRIM, UNWRAPPED_FRAMES, WINDOW_SAMPLES } from './notes';
 import { decodePianoNotes, PIANO_FPS, PIANO_FRAMES, PIANO_SAMPLE_RATE, PIANO_STRIDE, PIANO_USABLE, PIANO_WINDOW, pianoThresholds } from './piano';
-import type { Note } from '../types';
+import type { AiAnalysis, Note } from '../types';
+import { BEAT_BORDER, BEAT_CHUNK, BEAT_HOP, BEAT_MODEL_KEY, BEAT_MODEL_SHA256, BEAT_N_MELS, BEAT_SAMPLE_RATE, beatChunkStarts, buildAiAnalysis, logMel, resampleToBeatRate } from './beat';
 
 type Engine = 'piano' | 'basic';
 const sessions = new Map<Engine, ort.InferenceSession>();
+let beatSession: ort.InferenceSession | null = null;
 const hashes: Record<string, string> = {
   'models/basic-pitch.onnx': '2c3c1d144bfa61ad236e92e169c13535c880469a12a047d4e73451f2c059a0ec',
   'models/piano/model.onnx': 'bcbbfeff7950e9d2665336b60105b4767e9d7b8de1de14ce607c616b72668414',
   'models/piano/kong_notes_2s5_fp32.onnx.data': '21e9437c5f4c55737126e13778c804faff4b2eca49a9a7cc4ea49fd99804f001',
+  [BEAT_MODEL_KEY]: BEAT_MODEL_SHA256,
 };
 const progress = (value: number, detail: string) => self.postMessage({ type: 'progress', value, detail });
+const aiProgress = (value: number, detail: string) => self.postMessage({ type: 'progress', value, detail, ai: true });
 const clock = (value: number) => `${Math.floor(value / 60)}:${Math.floor(value % 60).toString().padStart(2, '0')}`;
 
 function configureOrt(base: string) {
@@ -73,6 +77,52 @@ async function loadSession(engine: Engine, base: string) {
   }
   sessions.set(engine, session);
   return session;
+}
+
+async function loadBeatSession(base: string) {
+  if (beatSession) return beatSession;
+  configureOrt(base);
+  aiProgress(0, 'Loading AI Assist · Beat This! small0 (~10 MB once, then cached offline)');
+  const model = await fetchVerified(new URL(BEAT_MODEL_KEY, base), BEAT_MODEL_KEY, 'The AI Assist model', fraction => aiProgress(fraction * 0.15, `Downloading AI Assist · ${Math.round(fraction * 100)}%`));
+  aiProgress(0.18, 'Preparing the local beat/downbeat model');
+  beatSession = await ort.InferenceSession.create(model, { executionProviders: ['wasm'], graphOptimizationLevel: 'all', intraOpNumThreads: 1, interOpNumThreads: 1 });
+  return beatSession;
+}
+
+async function analyzeBeats(audio: Float32Array, sampleRate: number, base: string): Promise<AiAnalysis | null> {
+  const session = await loadBeatSession(base);
+  aiProgress(0.2, 'AI Assist · preparing log-mel features');
+  const signal = resampleToBeatRate(audio, sampleRate);
+  const { mel, frames } = logMel(signal);
+  if (frames < BEAT_SAMPLE_RATE / 2 / BEAT_HOP) return null;
+  const beatLogits = new Float32Array(frames).fill(-1000);
+  const downLogits = new Float32Array(frames).fill(-1000);
+  const starts = beatChunkStarts(frames);
+  for (let index = 0; index < starts.length; index++) {
+    const start = starts[index];
+    const left = Math.max(0, -start), right = Math.max(0, Math.min(BEAT_BORDER, start + BEAT_CHUNK - frames));
+    const from = Math.max(start, 0), to = Math.min(start + BEAT_CHUNK, frames);
+    const pieceFrames = left + (to - from) + right;
+    const piece = new Float32Array(pieceFrames * BEAT_N_MELS);
+    piece.set(mel.subarray(from * BEAT_N_MELS, to * BEAT_N_MELS), left * BEAT_N_MELS);
+    const input = new ort.Tensor('float32', piece, [1, pieceFrames, BEAT_N_MELS]);
+    const output = await session.run({ spect: input }, ['beat', 'downbeat']);
+    const beat = output.beat.data as Float32Array;
+    const down = output.downbeat.data as Float32Array;
+    const target = start + BEAT_BORDER;
+    const count = Math.min(pieceFrames - 2 * BEAT_BORDER, frames - target);
+    if (count > 0) {
+      beatLogits.set(beat.subarray(BEAT_BORDER, BEAT_BORDER + count), target);
+      downLogits.set(down.subarray(BEAT_BORDER, BEAT_BORDER + count), target);
+    }
+    for (const value of Object.values(output)) value.dispose();
+    input.dispose();
+    aiProgress(0.25 + 0.7 * (index + 1) / starts.length, `AI Assist · beat window ${index + 1}/${starts.length}`);
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  aiProgress(0.98, 'AI Assist · picking beats and downbeats');
+  const ai = buildAiAnalysis(beatLogits, downLogits);
+  return ai.beat_count >= 3 ? ai : null;
 }
 
 async function transcribeBasic(audio: Float32Array, sensitivity: number, base: string) {
@@ -160,12 +210,25 @@ async function transcribePiano(audio: Float32Array, sensitivity: number, base: s
   return { notes, tempo: estimateTempo(audio, PIANO_SAMPLE_RATE) };
 }
 
-self.onmessage = (event: MessageEvent<{ audio: Float32Array; sensitivity: number; base: string; engine: Engine }>) => {
-  const { audio, sensitivity, base, engine } = event.data;
+type TranscribeMessage = { type?: 'transcribe'; audio: Float32Array; sensitivity: number; base: string; engine: Engine; ai_assist?: boolean };
+type BeatsMessage = { type: 'beats'; audio: Float32Array; sampleRate: number; base: string };
+self.onmessage = (event: MessageEvent<TranscribeMessage | BeatsMessage>) => {
+  const message = event.data;
+  const fail = (error: unknown) => self.postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Browser transcription failed. Try a shorter WAV or MP3.' });
+  if (message.type === 'beats') {
+    analyzeBeats(message.audio, message.sampleRate, message.base).then(ai => self.postMessage({ type: 'beats-complete', ai })).catch(fail);
+    return;
+  }
+  const { audio, sensitivity, base, engine, ai_assist } = message;
   const run = engine === 'piano' ? transcribePiano : transcribeBasic;
-  run(audio, sensitivity, base).then(({ notes, tempo }) => {
-    self.postMessage({ type: 'complete', notes, tempo });
-  }).catch(error => {
-    self.postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Browser transcription failed. Try a shorter WAV or MP3.' });
-  });
+  const sampleRate = engine === 'piano' ? PIANO_SAMPLE_RATE : SAMPLE_RATE;
+  run(audio, sensitivity, base).then(async ({ notes, tempo }) => {
+    let ai: AiAnalysis | null = null;
+    let aiError: string | null = null;
+    if (ai_assist) {
+      try { ai = await analyzeBeats(audio, sampleRate, base); if (!ai) aiError = 'No steady beat was found. The standard conversion is kept.'; }
+      catch (error) { aiError = error instanceof Error ? error.message : 'The local beat model could not run. The standard conversion is kept.'; }
+    }
+    self.postMessage({ type: 'complete', notes, tempo, ai, aiError });
+  }).catch(fail);
 };

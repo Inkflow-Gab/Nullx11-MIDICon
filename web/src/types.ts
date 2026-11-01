@@ -5,13 +5,20 @@ export type Options = {
   cleanup: CleanupProfile;
   transpose: number; quantize: 'off' | '1/4' | '1/8' | '1/16'; tempo: number | null;
   sustain: boolean; preserve_dynamics: boolean; split_tracks: boolean; piano_range: boolean;
+  ai_assist: boolean; ai_align: boolean;
   start_seconds: number; duration_seconds: number | null;
+};
+export type AiAnalysis = {
+  model: 'beat-this-small0'; model_name: string; license: 'MIT';
+  beats: number[]; downbeats: number[]; tempo: number | null; meter: number | null;
+  beat_interval: number | null; beat_count: number; downbeat_count: number; aligned_notes?: number;
 };
 export const DEFAULT_OPTIONS: Options = {
   engine: 'auto', sensitivity: 60, min_duration_ms: 30, merge_gap_ms: 20,
   cleanup: 'balanced',
   transpose: 0, quantize: 'off', tempo: null, sustain: false,
   preserve_dynamics: true, split_tracks: true, piano_range: true,
+  ai_assist: false, ai_align: false,
   start_seconds: 0, duration_seconds: null,
 };
 export type Note = { start: number; end: number; pitch: number; velocity: number; id?: string };
@@ -21,6 +28,7 @@ export type Result = {
   duration: number; tempo: number; key: string; engine: string; engine_name: string;
   lowest_pitch: number | null; highest_pitch: number | null;
   tempo_is_estimate: boolean; key_is_estimate: boolean; meter: string; pedal_detected: boolean;
+  ai?: AiAnalysis | null; ai_aligned_notes?: number; ai_error?: string | null;
   edited_from?: string;
 };
 export type Job = {

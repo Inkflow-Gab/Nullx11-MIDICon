@@ -40,6 +40,9 @@ def main() -> None:
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     if all((MODEL_DIR / name).exists() and digest(MODEL_DIR / name) == sha for name, sha in HASHES.items()):
         print(f"Verified piano model already installed: {MODEL_DIR}")
+        from setup_beat_model import main as setup_beat
+
+        setup_beat()
         return
     print("Downloading the pinned piano model mirror (~85 MB)…")
     if args.archive:
@@ -72,6 +75,9 @@ def main() -> None:
             raise RuntimeError(f"Checksum mismatch for {name}: {actual}")
         tmp.replace(MODEL_DIR / name)
     print(f"Piano model verified and installed: {MODEL_DIR}")
+    from setup_beat_model import main as setup_beat
+
+    setup_beat()
 
 
 if __name__ == "__main__":

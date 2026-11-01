@@ -106,17 +106,40 @@ class Pipeline:
                 if check():
                     raise Cancelled()
                 (directory / "raw_notes.json").write_text(json.dumps(raw_notes))
+            ai = None
+            ai_error = None
+            if options.ai_assist:
+                from .beat import analyze_file
+
+                progress("refining", 87, "AI Assist · listening for the beat", "Running the local Beat This! model on this server", True)
+                try:
+                    ai = analyze_file(source, progress=lambda value, detail: progress("refining", 87 + value * 2, "AI Assist · beat tracking", detail), cancelled=check)
+                    if ai.get("beat_count", 0) < 3:
+                        ai = None
+                        ai_error = "No steady beat was found. The standard conversion is kept."
+                except Exception as exc:
+                    if check():
+                        raise Cancelled()
+                    ai = None
+                    ai_error = str(exc) or "The local beat model could not run. The standard conversion is kept."
+                    log.warning("AI Assist fell back for job %s: %s", job_id, ai_error)
+                if ai_error:
+                    progress("refining", 89, "AI Assist unavailable", "Keeping the standard conversion and tempo estimate", True)
             progress("refining", 89, "Putting the notes together", "Estimating tempo and key, cleaning note boundaries", True)
             tempo, key = estimate_music(source, raw_notes)
+            if ai and ai.get("tempo"):
+                tempo = float(ai["tempo"])
             if options.tempo:
                 tempo = float(options.tempo)
-            notes, stats = refine_notes(raw_notes, options, tempo)
+            notes, stats = refine_notes(raw_notes, options, tempo, ai)
             if not notes:
                 raise AudioError("No confident piano notes were found. Try a cleaner recording, raise note sensitivity, or choose the Polyphonic engine.")
             if check():
                 raise Cancelled()
             progress("refining", 96, "Creating your MIDI", "Adding dynamics and saving your downloadable files")
-            result = result_metadata(notes, duration, tempo, key, engine, stats)
+            result = result_metadata(notes, duration, tempo, key, engine, stats, ai)
+            if ai_error:
+                result["ai_error"] = ai_error
             export_midi(notes, directory / "transcription.mid", tempo=tempo, options=options, title=job["title"])
             (directory / "notes.json").write_text(json.dumps(notes))
             waveform = waveform_peaks(source)
