@@ -13,6 +13,18 @@ Click either image to open the video on YouTube.
 
 ---
 
+## Web studio
+
+A browser-based **Nullx MIDICon Studio** is included with Home, Studio, Library, and Guide pages. The static **browser studio** runs Spotify Basic Pitch on your device and is designed for GitHub Pages; the **full studio** adds the Python backend, piano-specialist engine, YouTube import, longer uploads, and server-side history. Upload audio, watch real conversion progress, preview/edit the piano roll, refine note settings, download MIDI/JSON/CSV/ZIP, and keep a private library. See [`README_WEB.md`](README_WEB.md) for GitHub Pages deployment, setup, Docker, accuracy measurements, and limitations.
+
+The studio is also an **installable PWA**: on supported browsers you can add it to your home screen/desktop and launch it like an app. The service worker caches only the static app shell; conversion, history, and downloads still require the server.
+
+```bash
+bash scripts/run_web.sh   # after the one-time setup in README_WEB.md
+```
+
+The original research CLI and Colab workflow below remain available.
+
 ## Quick start
 
 The easiest way to get started is [`Colab_Inference.ipynb`](Colab_Inference.ipynb): upload a song, run the cells, and download the MIDI. No local setup or checkpoint search required.
