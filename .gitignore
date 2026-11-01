@@ -259,6 +259,7 @@ web/playwright-report/
 web/public/models/
 web/public/ort/
 web/public/demo.wav
+web/.model-cache/
 
 # Playwright scratch output from any working directory
 test-results/

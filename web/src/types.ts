@@ -1,12 +1,15 @@
 export type Engine = 'auto' | 'piano' | 'basic';
+export type CleanupProfile = 'light' | 'balanced' | 'clean';
 export type Options = {
   engine: Engine; sensitivity: number; min_duration_ms: number; merge_gap_ms: number;
+  cleanup: CleanupProfile;
   transpose: number; quantize: 'off' | '1/4' | '1/8' | '1/16'; tempo: number | null;
   sustain: boolean; preserve_dynamics: boolean; split_tracks: boolean; piano_range: boolean;
   start_seconds: number; duration_seconds: number | null;
 };
 export const DEFAULT_OPTIONS: Options = {
   engine: 'auto', sensitivity: 60, min_duration_ms: 30, merge_gap_ms: 20,
+  cleanup: 'balanced',
   transpose: 0, quantize: 'off', tempo: null, sustain: false,
   preserve_dynamics: true, split_tracks: true, piano_range: true,
   start_seconds: 0, duration_seconds: null,

@@ -12,10 +12,11 @@ export class PianoPreview {
   private notes: Note[] = [];
   private running = false;
   private volume = 0.55;
+  private rate = 1;
   onTick: ((time: number) => void) | null = null;
   onEnd: (() => void) | null = null;
 
-  async play(notes: Note[], from = 0) {
+  async play(notes: Note[], from = 0, rate = 1) {
     await this.stop();
     if (!this.context) {
       this.context = new AudioContext();
@@ -30,6 +31,7 @@ export class PianoPreview {
     await this.context.resume();
     this.notes = [...notes].sort((a, b) => a.start - b.start);
     this.offset = from;
+    this.rate = Math.max(0.25, Math.min(2, rate));
     this.startedAt = this.context.currentTime;
     this.index = this.notes.findIndex(note => note.start >= from);
     if (this.index < 0) this.index = this.notes.length;
@@ -37,15 +39,15 @@ export class PianoPreview {
     const endTime = this.notes.length ? this.notes.reduce((max, note) => Math.max(max, note.end), 0) : 0;
     // Resume sustained notes when seeking into the middle of a piece.
     this.notes.forEach((note, index) => {
-      if (note.start < from && note.end > from + 0.03) this.voice(note, Math.min(0.8, note.end - from), index);
+      if (note.start < from && note.end > from + 0.03) this.voice(note, Math.min(0.8, note.end - from) / this.rate, index);
     });
     const tick = () => {
       if (!this.context || !this.running) return;
-      const now = this.context.currentTime - this.startedAt + this.offset;
-      while (this.index < this.notes.length && this.notes[this.index].start <= now + 0.1) {
+      const now = (this.context.currentTime - this.startedAt) * this.rate + this.offset;
+      while (this.index < this.notes.length && this.notes[this.index].start <= now + 0.1 * this.rate) {
         const note = this.notes[this.index];
-        const delay = Math.max(0, note.start - now);
-        if (note.end > now) this.voice(note, note.end - note.start, this.index, delay);
+        const delay = Math.max(0, note.start - now) / this.rate;
+        if (note.end > now) this.voice(note, (note.end - note.start) / this.rate, this.index, delay);
         this.index++;
       }
       this.onTick?.(now);

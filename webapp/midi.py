@@ -58,14 +58,15 @@ def refine_notes(raw_notes: list[dict], options: TranscriptionOptions, tempo: fl
             note["end"] += 0.2
     # Merge only repeated pitches with a short gap. Different simultaneous
     # pitches (chords) are never collapsed.
+    profile = getattr(options, "cleanup", "balanced")
     notes.sort(key=lambda note: (note["pitch"], note["start"], note["end"]))
     merged: list[dict] = []
     merge_count = 0
     by_pitch: dict[int, dict] = {}
-    gap = options.merge_gap_ms / 1000
+    gap = max(options.merge_gap_ms, 35 if profile == "clean" else 0) / 1000
     for note in notes:
         previous = by_pitch.get(note["pitch"])
-        if previous and 0 <= note["start"] - previous["end"] <= gap:
+        if previous and -0.012 <= note["start"] - previous["end"] <= gap:
             if note["end"] > previous["end"]:
                 previous["end"] = note["end"]
             previous["velocity"] = max(previous["velocity"], note["velocity"])
@@ -74,8 +75,29 @@ def refine_notes(raw_notes: list[dict], options: TranscriptionOptions, tempo: fl
             current = dict(note)
             merged.append(current)
             by_pitch[note["pitch"]] = current
-    minimum = options.min_duration_ms / 1000
+    minimum = max(options.min_duration_ms, 60 if profile == "clean" else 0) / 1000
     merged = [note for note in merged if note["end"] - note["start"] >= minimum]
+    if profile == "clean":
+        merged = [note for note in merged if not (note["velocity"] < 16 and note["end"] - note["start"] < 0.12)]
+        lower = sorted((note for note in merged if note["velocity"] >= 24), key=lambda note: -note["velocity"])
+        kept = []
+        for note in merged:
+            duration = note["end"] - note["start"]
+            ghost = False
+            if duration >= 0.05 and note["velocity"] < 40:
+                for base in lower:
+                    if base is note or base["pitch"] >= note["pitch"]:
+                        continue
+                    interval = note["pitch"] - base["pitch"]
+                    if interval not in (12, 19, 24, 28) or note["velocity"] > base["velocity"] * 0.55:
+                        continue
+                    overlap = min(note["end"], base["end"]) - max(note["start"], base["start"])
+                    if overlap >= duration * 0.7 and base["end"] - base["start"] >= duration * 0.8:
+                        ghost = True
+                        break
+            if not ghost:
+                kept.append(note)
+        merged = kept
     # A MIDI note-off cannot distinguish two identical overlapping pitches.
     by_pitch.clear()
     for note in merged:

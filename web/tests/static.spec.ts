@@ -32,7 +32,7 @@ test('static subpath: real on-device demo, downloads, persistence, editing, and 
   await page.getByRole('button', { name: 'Try a demo', exact: true }).click();
   await expect(page.getByRole('link', { name: /Download MIDI/ })).toBeVisible({ timeout: 180_000 });
   await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
-  await expect(page.locator('.result-meta')).toContainText('Basic Pitch · browser');
+  await expect(page.locator('.result-meta')).toContainText('Piano specialist · browser');
   const noteCount = await page.locator('.result-stats strong').first().innerText();
   expect(parseInt(noteCount.replace(/[^0-9]/g, ''), 10)).toBeGreaterThan(0);
 
@@ -44,6 +44,8 @@ test('static subpath: real on-device demo, downloads, persistence, editing, and 
   await page.getByRole('button', { name: 'Edit notes', exact: true }).click();
   await page.getByRole('button', { name: 'Select all', exact: true }).click();
   await page.getByLabel('Selected note velocity').press('ArrowRight');
+  await page.getByRole('button', { name: 'Octave up', exact: true }).click();
+  await page.getByRole('button', { name: 'Duplicate', exact: true }).click();
   await page.getByRole('button', { name: 'Save as new version' }).click();
   await expect(page.locator('.preview-song strong')).toContainText('edited');
 
@@ -64,7 +66,7 @@ test('static subpath: real on-device demo, downloads, persistence, editing, and 
   // The service worker must have cached the model/runtime/demo for offline reuse.
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   const cached = await page.evaluate(async () => {
-    const wanted = ['models/basic-pitch.onnx', 'ort/ort-wasm-simd-threaded.wasm', 'demo.wav'];
+    const wanted = ['models/piano/model.onnx', 'models/piano/kong_notes_2s5_fp32.onnx.data', 'ort/ort-wasm-simd-threaded.wasm', 'demo.wav'];
     const found: Record<string, boolean> = {};
     for (const key of await caches.keys()) {
       const cache = await caches.open(key);
@@ -72,7 +74,8 @@ test('static subpath: real on-device demo, downloads, persistence, editing, and 
     }
     return found;
   });
-  expect(cached['models/basic-pitch.onnx']).toBeTruthy();
+  expect(cached['models/piano/model.onnx']).toBeTruthy();
+  expect(cached['models/piano/kong_notes_2s5_fp32.onnx.data']).toBeTruthy();
   expect(cached['ort/ort-wasm-simd-threaded.wasm']).toBeTruthy();
   expect(cached['demo.wav']).toBeTruthy();
 
@@ -89,6 +92,7 @@ test('static subpath: long 2-minute clip converts on device with live progress',
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('./?mode=browser#studio');
+  await page.getByLabel('Transcription engine').selectOption('basic');
   await page.getByLabel('Choose audio or video file').setInputFiles({ name: 'long-take.wav', mimeType: 'audio/wav', buffer: longWav(120) });
   await expect(page.locator('.selected-file-name')).toHaveText('long-take.wav');
   await expect(page.locator('.long-clip-note')).toBeVisible();
@@ -107,6 +111,7 @@ test('static subpath: long 2-minute clip converts on device with live progress',
 
 test('static subpath: long clip can be cancelled without losing the input', async ({ page }) => {
   await page.goto('./?mode=browser#studio');
+  await page.getByLabel('Transcription engine').selectOption('basic');
   await page.getByLabel('Choose audio or video file').setInputFiles({ name: 'cancel-take.wav', mimeType: 'audio/wav', buffer: longWav(120) });
   await page.getByRole('button', { name: 'Convert on this device' }).click();
   await expect(page.locator('.preview-card .conversion-progress')).toBeVisible();

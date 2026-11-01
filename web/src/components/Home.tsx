@@ -17,7 +17,7 @@ type Props = {
 export function Home({ browserMode, busy, completedCount, recent, onStudio, onDemo, onLibrary, onGuide, onOpen }: Props) {
   const features = [
     { icon: LockKeyhole, title: browserMode ? 'Private by default' : 'A workspace of your own', text: browserMode ? 'Audio is decoded and transcribed inside this browser. Nothing is uploaded to a MIDICon server.' : 'A private browser session keeps your conversions separate, with server-side retention you control.' },
-    { icon: AudioLines, title: 'Real neural listening', text: browserMode ? 'Spotify Basic Pitch runs locally through WebAssembly, finding pitch, onsets, and dynamics.' : 'Choose the piano specialist or polyphonic Basic Pitch, with real progress at every stage.' },
+    { icon: AudioLines, title: 'Real neural listening', text: browserMode ? 'The piano specialist and Basic Pitch run locally through WebAssembly, finding precise onsets, offsets, and dynamics.' : 'Choose the piano specialist or polyphonic Basic Pitch, with real progress at every stage.' },
     { icon: SlidersHorizontal, title: 'A canvas, not a cage', text: 'Edit the piano roll, save new versions, transpose, quantize, and refine without starting over.' },
     { icon: FolderOpen, title: 'Ready for your DAW', text: 'Export standard MIDI, note JSON, CSV, or a complete ZIP. Take your whole library with you.' },
   ];
@@ -43,7 +43,7 @@ export function Home({ browserMode, busy, completedCount, recent, onStudio, onDe
           <div className="home-wave">{Array.from({ length: 42 }, (_, i) => <span key={i} style={{ height: `${18 + Math.abs(Math.sin(i * 0.55) * Math.cos(i * 0.21)) * 72}%` }} />)}</div>
           <div className="home-roll">{Array.from({ length: 26 }, (_, i) => <i key={i} style={{ left: `${(i * 13) % 88}%`, top: `${12 + (i * 29) % 70}%`, width: `${9 + (i % 4) * 5}%` }} className={i % 3 === 0 ? 'teal' : ''} />)}</div>
           <div className="home-keys">{Array.from({ length: 14 }, (_, i) => <span key={i} className={[1, 3, 6, 8, 10, 13].includes(i) ? 'black' : ''} />)}</div>
-          <div className="home-art-bottom"><span><Sparkles size={13} />{browserMode ? 'Basic Pitch · on-device' : 'Piano specialist + Basic Pitch'}</span><b>MIDI ready</b></div>
+          <div className="home-art-bottom"><span><Sparkles size={13} />{browserMode ? 'Piano specialist · on-device' : 'Piano specialist + Basic Pitch'}</span><b>MIDI ready</b></div>
         </div>
         <span className="home-art-note note-one"><Music2 size={20} /></span>
         <span className="home-art-note note-two"><AudioLines size={18} /></span>
@@ -54,7 +54,7 @@ export function Home({ browserMode, busy, completedCount, recent, onStudio, onDe
       <span className="home-mode-icon">{browserMode ? <LockKeyhole size={21} /> : <Sparkles size={21} />}</span>
       <div>
         <h2>{browserMode ? 'You’re in the browser studio' : 'You’re in the full studio'}</h2>
-        <p>{browserMode ? 'GitHub Pages hosts the app; your device does the listening. Convert up to 10 minutes / 100 MB with Basic Pitch—long clips are processed in windows with live progress. YouTube imports and the piano specialist need the full MIDICon server.' : 'Upload longer audio, import permitted YouTube videos, and choose between the piano specialist and polyphonic Basic Pitch.'}</p>
+        <p>{browserMode ? 'GitHub Pages hosts the app; your device does the listening. Convert up to 10 minutes / 100 MB with the piano specialist or Basic Pitch. The piano model downloads once, then works offline. YouTube import needs the full MIDICon server.' : 'Upload longer audio, import permitted YouTube videos, and choose between the piano specialist and polyphonic Basic Pitch.'}</p>
       </div>
       <button className="text-button" onClick={onGuide}>Compare modes <ArrowUpRight size={14} /></button>
     </section>
