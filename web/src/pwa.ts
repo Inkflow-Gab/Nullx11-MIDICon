@@ -6,7 +6,7 @@ export type BeforeInstallPromptEvent = Event & {
 export function registerServiceWorker() {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then(registration => {
+    navigator.serviceWorker.register(new URL('sw.js', document.baseURI).href).then(registration => {
       registration.addEventListener('updatefound', () => {
         const installing = registration.installing;
         if (!installing) return;

@@ -9,7 +9,7 @@ test.afterEach(async ({ page }) => {
 test('real demo, playback, MIDI download, refinement and private history', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/#studio');
   await expect(page.getByRole('heading', { name: 'From sound to keys.' })).toBeVisible();
   await page.getByRole('button', { name: 'Try a demo', exact: true }).click();
   await expect(page.getByRole('link', { name: /Download MIDI/ })).toBeVisible({ timeout: 90_000 });
@@ -47,7 +47,7 @@ test('real demo, playback, MIDI download, refinement and private history', async
 });
 
 test('real audio upload, source validation, and YouTube input', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/#studio');
   await page.getByLabel('Choose audio or video file').setInputFiles(path.resolve('../webapp/assets/demo.wav'));
   await expect(page.getByText('demo.wav', { exact: true })).toBeVisible();
   await page.getByText('Trim your audio', { exact: false }).click();
@@ -64,7 +64,7 @@ test('real audio upload, source validation, and YouTube input', async ({ page })
 test('editable piano roll saves a new version and library batch download', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/#studio');
   await page.getByRole('button', { name: 'Try a demo', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Edit notes', exact: true })).toBeVisible({ timeout: 90_000 });
   await page.getByRole('button', { name: 'Edit notes', exact: true }).click();
@@ -88,7 +88,7 @@ test('editable piano roll saves a new version and library batch download', async
   await page.getByRole('button', { name: 'My library' }).click();
   await expect(page.locator('.song-title-button').filter({ hasText: 'Little steps · original demo · edited' })).toBeVisible();
   const downloadEvent = page.waitForEvent('download');
-  await page.getByRole('link', { name: 'Download all MIDI' }).click();
+  await page.getByRole('button', { name: 'Download all MIDI' }).click();
   const download = await downloadEvent;
   const file = await download.path();
   expect((await readFile(file!)).subarray(0, 2).toString()).toBe('PK');
@@ -96,8 +96,8 @@ test('editable piano roll saves a new version and library batch download', async
 });
 
 test('PWA manifest, service worker, offline shell, and online-only API policy', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest');
+  await page.goto('/#studio');
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', './manifest.webmanifest');
   const manifestResponse = await page.request.get('/manifest.webmanifest');
   expect(manifestResponse.ok()).toBeTruthy();
   const manifest = await manifestResponse.json();
@@ -124,7 +124,7 @@ test('PWA manifest, service worker, offline shell, and online-only API policy', 
 
 test('mobile navigation, guide, settings and no horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/#studio');
   await expect(page.getByRole('heading', { name: 'From sound to keys.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Open navigation' }).click();

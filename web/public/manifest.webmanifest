@@ -1,23 +1,23 @@
 {
-  "id": "/",
+  "id": "./",
   "name": "Nullx MIDICon",
   "short_name": "MIDICon",
-  "description": "Turn songs and YouTube audio into playable piano MIDI. Edit notes, refine results, and download your library.",
-  "start_url": "/?source=pwa",
-  "scope": "/",
+  "description": "Turn songs into playable piano MIDI. Transcribe locally in your browser, edit notes, and download your library.",
+  "start_url": "./?source=pwa#studio",
+  "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f7f8fa",
   "theme_color": "#7a60d4",
   "categories": ["music", "productivity", "utilities"],
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Studio", "url": "/#studio", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "My library", "url": "/#library", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Studio", "url": "./#studio", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "My library", "url": "./#library", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

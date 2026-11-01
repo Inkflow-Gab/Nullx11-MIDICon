@@ -255,3 +255,7 @@ node_modules/
 web/*.tsbuildinfo
 web/test-results/
 web/playwright-report/
+# Copied from pinned npm packages / tracked source assets by prepare-assets.mjs.
+web/public/models/
+web/public/ort/
+web/public/demo.wav

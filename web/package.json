@@ -4,15 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prepare:assets": "node scripts/prepare-assets.mjs",
+    "predev": "npm run prepare:assets",
     "dev": "vite --host 0.0.0.0",
+    "prebuild": "npm run prepare:assets",
     "build": "tsc -b && vite build",
+    "prepreview": "npm run prepare:assets",
     "preview": "vite preview --host 0.0.0.0",
     "test:e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.2.0",
     "@fontsource-variable/manrope": "^5.2.0",
+    "fflate": "^0.8.3",
     "lucide-react": "^0.468.0",
+    "onnxruntime-web": "^1.22.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

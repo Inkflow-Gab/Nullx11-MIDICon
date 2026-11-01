@@ -1,29 +1,20 @@
-/* MIDICon service worker: cache the static app shell only.
- * Never cache /api/* (sessions, jobs, progress, notes, downloads, or user audio).
- */
-const VERSION = 'v1';
+/* Cache only public application assets. Never cache API responses or upload bodies. */
+const VERSION = 'v2';
 const SHELL_CACHE = `midicon-shell-${VERSION}`;
 const ASSET_CACHE = `midicon-assets-${VERSION}`;
-const SHELL = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/favicon.svg',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/apple-touch-icon.png',
-];
+const BASE = new URL('./', self.location.href);
+const local = path => new URL(path, BASE).href;
+const SHELL = ['', 'index.html', 'manifest.webmanifest', 'favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'].map(local);
 
 async function precacheBuildAssets() {
   const cache = await caches.open(ASSET_CACHE);
-  const response = await fetch('/index.html');
+  const response = await fetch(local('index.html'));
   if (!response.ok) return;
   const html = await response.text();
   const urls = new Set();
-  for (const match of html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)) urls.add(match[1]);
+  for (const match of html.matchAll(/(?:src|href)="([^"]*assets\/[^"]+)"/g)) urls.add(new URL(match[1], BASE).href);
   const initial = [...urls];
   if (initial.length) await cache.addAll(initial);
-  // Vite CSS references local font files; cache those too so the offline shell keeps its type.
   for (const asset of initial) {
     if (!asset.endsWith('.css')) continue;
     try {
@@ -33,82 +24,53 @@ async function precacheBuildAssets() {
       for (const match of css.matchAll(/url\(([^)]+)\)/g)) {
         const raw = match[1].trim().replace(/^['"]|['"]$/g, '');
         if (!raw || raw.startsWith('data:')) continue;
-        const resolved = new URL(raw, new URL(asset, self.location.origin));
-        if (resolved.origin === self.location.origin && resolved.pathname.startsWith('/assets/')) urls.add(resolved.pathname);
+        const resolved = new URL(raw, asset);
+        if (resolved.origin === BASE.origin && resolved.pathname.includes('/assets/')) urls.add(resolved.href);
       }
-    } catch { /* best-effort font precache */ }
+    } catch { /* Font precaching is best effort. */ }
   }
-  const all = [...urls].filter(url => !initial.includes(url));
-  if (all.length) await cache.addAll(all);
+  const extra = [...urls].filter(url => !initial.includes(url));
+  if (extra.length) await cache.addAll(extra);
+  // Heavy conversion assets are cached best-effort so a loaded browser studio can keep working offline.
+  for (const path of ['models/basic-pitch.onnx', 'models/LICENSE', 'models/NOTICE', 'ort/ort-wasm-simd-threaded.wasm', 'ort/ort-wasm-simd-threaded.mjs', 'ort/LICENSE', 'demo.wav']) {
+    try { const url = local(path); const response = await fetch(url); if (response.ok) await cache.put(url, response); } catch { /* Optional until first online use. */ }
+  }
 }
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(SHELL_CACHE)
-      .then(cache => cache.addAll(SHELL))
-      .then(precacheBuildAssets)
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil(caches.open(SHELL_CACHE).then(cache => cache.addAll(SHELL)).then(precacheBuildAssets));
 });
-
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys
-        .filter(key => key.startsWith('midicon-') && key !== SHELL_CACHE && key !== ASSET_CACHE)
-        .map(key => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('midicon-') && key !== SHELL_CACHE && key !== ASSET_CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
+self.addEventListener('message', event => { if (event.data?.type === 'SKIP_WAITING') self.skipWaiting(); });
 
-async function networkFirstNavigation(request) {
+async function navigation(request) {
   try {
     const response = await fetch(request);
-    if (response && response.ok) {
-      const cache = await caches.open(SHELL_CACHE);
-      await cache.put('/index.html', response.clone());
-    }
+    if (response.ok) (await caches.open(SHELL_CACHE)).put(local('index.html'), response.clone());
     return response;
   } catch {
-    const cached = await caches.match('/index.html');
-    return cached || new Response('MIDICon is offline. Reconnect to load the studio.', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    });
+    return await caches.match(local('index.html')) || new Response('Reconnect once to install the MIDICon offline shell.', { status: 503, headers: { 'Content-Type': 'text/plain' } });
   }
 }
-
-async function staleWhileRevalidate(request) {
+async function staticAsset(request) {
   const cache = await caches.open(ASSET_CACHE);
   const cached = await cache.match(request);
   const network = fetch(request).then(response => {
-    if (response && response.ok) cache.put(request, response.clone());
+    if (response.ok) cache.put(request, response.clone());
     return response;
-  }).catch(() => cached);
-  return cached || network;
+  });
+  if (cached) { network.catch(() => {}); return cached; }
+  try { return await network; } catch { return new Response('This browser-model asset is not cached yet. Reconnect and try again.', { status: 503 }); }
 }
-
 self.addEventListener('fetch', event => {
   const request = event.request;
-  if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-  // Privacy/functionality guard: API responses are always network-only.
-  if (url.pathname.startsWith('/api/')) return;
-
-  if (request.mode === 'navigate') {
-    event.respondWith(networkFirstNavigation(request));
-    return;
-  }
-
-  if (SHELL.includes(url.pathname)) {
-    event.respondWith(caches.match(request).then(cached => cached || fetch(request)));
-    return;
-  }
-
-  const isStatic = url.pathname.startsWith('/assets/') ||
-    ['script', 'style', 'font', 'image'].includes(request.destination);
-  if (isStatic) {
-    event.respondWith(staleWhileRevalidate(request));
-  }
+  if (request.method !== 'GET' || url.origin !== BASE.origin || !url.pathname.startsWith(BASE.pathname)) return;
+  const relative = url.pathname.slice(BASE.pathname.length);
+  if (relative.startsWith('api/')) return;
+  if (request.mode === 'navigate') { event.respondWith(navigation(request)); return; }
+  if (SHELL.includes(url.href)) { event.respondWith(caches.match(request).then(cached => cached || fetch(request))); return; }
+  if (/^(assets|models|ort)\//.test(relative) || relative === 'demo.wav') event.respondWith(staticAsset(request));
 });
