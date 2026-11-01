@@ -95,6 +95,33 @@ test('editable piano roll saves a new version and library batch download', async
   expect(errors).toEqual([]);
 });
 
+test('PWA manifest, service worker, offline shell, and online-only API policy', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest');
+  const manifestResponse = await page.request.get('/manifest.webmanifest');
+  expect(manifestResponse.ok()).toBeTruthy();
+  const manifest = await manifestResponse.json();
+  expect(manifest.name).toBe('Nullx MIDICon');
+  expect(manifest.icons.some((icon: { sizes?: string }) => icon.sizes === '512x512')).toBeTruthy();
+  const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope);
+  expect(scope).toContain('127.0.0.1:3000');
+  await page.evaluate(async () => { await fetch('/api/health'); });
+  const apiCached = await page.evaluate(async () => {
+    for (const key of await caches.keys()) {
+      const cache = await caches.open(key);
+      if (await cache.match('/api/health')) return true;
+    }
+    return false;
+  });
+  expect(apiCached).toBeFalsy();
+  expect(await page.evaluate(async () => (await caches.keys()).some(key => key.startsWith('midicon-shell')))).toBeTruthy();
+  await page.context().setOffline(true);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'From sound to keys.' })).toBeVisible();
+  await expect(page.getByText('You’re offline.', { exact: false })).toBeVisible();
+  await page.context().setOffline(false);
+});
+
 test('mobile navigation, guide, settings and no horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');

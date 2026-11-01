@@ -255,14 +255,3 @@ node_modules/
 web/*.tsbuildinfo
 web/test-results/
 web/playwright-report/
-
-# MIDICon Android companion: local SDK/build state and installable artifacts
-android/.gradle/
-android/**/build/
-android/local.properties
-android/.kotlin/
-*.apk
-*.aab
-*.keystore
-*.jks
-!android/gradlew.bat

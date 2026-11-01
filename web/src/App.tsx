@@ -11,6 +11,7 @@ import { Progress } from './components/Progress';
 import { History } from './components/History';
 import { Guide } from './components/Guide';
 import { Dialog } from './components/Dialog';
+import { isStandaloneDisplay, type BeforeInstallPromptEvent } from './pwa';
 
 type Route = 'studio' | 'library' | 'guide';
 type Modal = { type: 'settings' | 'about' | 'clear' } | { type: 'rename' | 'delete'; job: Job } | null;
@@ -45,6 +46,9 @@ export default function App() {
   const [undoStack, setUndoStack] = useState<Note[][]>([]);
   const [redoStack, setRedoStack] = useState<Note[][]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(isStandaloneDisplay);
+  const [offline, setOffline] = useState(() => !navigator.onLine);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadRequest = useRef<{ abort: () => void } | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -87,6 +91,35 @@ export default function App() {
     return () => { live = false; };
   }, [selectedJob?.id, selectedJob?.status]);
   useEffect(() => () => uploadRequest.current?.abort(), []);
+  useEffect(() => {
+    const onPrompt = (event: Event) => { event.preventDefault(); setInstallPrompt(event as BeforeInstallPromptEvent); };
+    const onInstalled = () => { setInstalled(true); setInstallPrompt(null); notify('MIDICon installed. Launch it from your home screen or desktop.'); };
+    const onUpdate = () => notify('A new MIDICon version is ready. Refresh to update.');
+    const onOnline = () => setOffline(false);
+    const onOffline = () => setOffline(true);
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    window.addEventListener('midicon-sw-update', onUpdate);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+      window.removeEventListener('midicon-sw-update', onUpdate);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, [notify]);
+  async function installApp() {
+    if (!installPrompt) return;
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === 'accepted') notify('Installing MIDICon…');
+    } finally {
+      setInstallPrompt(null);
+    }
+  }
 
   function acceptFile(value: File | undefined) {
     if (!value) return;
@@ -178,8 +211,9 @@ export default function App() {
       <div className="sidebar-divider" /><button className="sidebar-settings" onClick={() => setModal({ type: 'settings' })}><Settings2 size={17} />Workspace settings</button>
       <div className="sidebar-bottom"><div className="sidebar-note"><div className="mini-keys" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} className={[1, 3, 6].includes(i) ? 'black' : ''} />)}<Music2 size={18} className="floating-note" /></div><h3>Good music deserves<br />a second life.</h3><p>Make something that<br />could only come from you.</p><button onClick={() => navigate('guide')}>Find your inspiration <ArrowUpRight size={13} /></button></div><button className="workspace-profile" onClick={() => setModal({ type: 'settings' })}><span className="avatar">Y</span><span><strong>Your workspace</strong><small><span className="tiny-dot" /> Just for you</small></span><ChevronDown size={14} /></button></div>
     </aside>
-    <div className="main-shell"><header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={21} /></button><span>Workspace</span><ChevronRight size={13} /><strong>{route === 'studio' ? 'Studio' : route === 'library' ? 'My library' : 'How it works'}</strong></div><div className="topbar-right"><span className={`system-status ${connectionError || (session && !session.engines.length) ? 'offline' : ''}`}><i />{connectionError ? 'Server offline' : session ? session.engines.length ? 'Ready when you are' : 'Model setup needed' : 'Connecting to studio'}</span><span className="topbar-divider" /><button className="icon-button" aria-label="Help and tips" onClick={() => navigate('guide')}><CircleHelp size={19} /></button><button className="topbar-avatar" aria-label="Workspace settings" onClick={() => setModal({ type: 'settings' })}>Y</button></div></header>
+    <div className="main-shell"><header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={21} /></button><span>Workspace</span><ChevronRight size={13} /><strong>{route === 'studio' ? 'Studio' : route === 'library' ? 'My library' : 'How it works'}</strong></div><div className="topbar-right"><span className={`system-status ${offline || connectionError || (session && !session.engines.length) ? 'offline' : ''}`}><i />{offline ? 'Offline' : connectionError ? 'Server offline' : session ? session.engines.length ? 'Ready when you are' : 'Model setup needed' : 'Connecting to studio'}</span>{installPrompt && !installed && <button className="icon-button" aria-label="Install MIDICon app" title="Install MIDICon" onClick={() => void installApp()}><ArrowDownToLine size={18} /></button>}<span className="topbar-divider" /><button className="icon-button" aria-label="Help and tips" onClick={() => navigate('guide')}><CircleHelp size={19} /></button><button className="topbar-avatar" aria-label="Workspace settings" onClick={() => setModal({ type: 'settings' })}>Y</button></div></header>
       <main className="main-content">
+        {offline && <div className="connection-banner" role="status"><CloudUpload size={19} /><span>You’re offline. The cached app shell can open, but conversion, history, and downloads need the server.</span></div>}
         {connectionError && <div className="connection-banner" role="alert"><CloudUpload size={19} /><span>{connectionError}</span><button className="text-button" onClick={() => window.location.reload()}>Reconnect</button></div>}
         {route === 'studio' && <>
           <div className="page-heading studio-heading"><div><div className="eyebrow"><span /> A NEW WAY TO MAKE IT YOURS</div><h1>From sound to keys<span className="heading-dot">.</span></h1><p>Turn a song you love into MIDI you can make your own.</p></div><div className="heading-pill"><Sparkles size={14} /><span>Big ideas start with a little audio</span></div></div>
@@ -218,7 +252,7 @@ export default function App() {
     </div>
     {toast && <div className="toast" role="status"><CheckCircle2 size={18} /><span>{toast}</span><button className="icon-button tiny" aria-label="Dismiss notification" onClick={() => setToast('')}><X size={14} /></button></div>}
     {modal && <Dialog title={modal.type === 'settings' ? 'Your workspace, your way.' : modal.type === 'rename' ? 'Give it a new name' : modal.type === 'delete' ? 'Delete this conversion?' : modal.type === 'clear' ? 'Start with a clean library?' : 'A little sound. A lot of possibility.'} onClose={() => setModal(null)}>
-      {modal.type === 'settings' && <div className="workspace-settings"><div className="workspace-identity"><span className="avatar large">Y</span><div><strong>Your private workspace</strong><span>Browser session · {session?.workspace_id || 'connecting'}</span></div><ShieldCheck size={22} /></div><p className="dialog-description">No account needed. A private cookie keeps this browser's history separate from everyone else's. It is not a cross-device account.</p><label className="slider-field"><span>Preview volume <strong>{Math.round(volume * 100)}%</strong></span><input aria-label="Workspace preview volume" type="range" min={0} max={1} step={0.01} value={volume} onChange={event => setVolume(Number(event.target.value))} /></label><div className="saved-settings-note"><CheckCircle2 size={16} /><span>Your last-used transcription settings are saved automatically in this browser.</span></div><div className="settings-info"><div><span>File retention</span><strong>{session?.retention_days || 7} days</strong></div><div><span>Storage</span><strong>This MIDICon server</strong></div><div><span>Transcription</span><strong>{session?.engines.map(engine => engine.name).join(' + ') || 'Not connected'}</strong></div></div><div className="privacy-warning"><ShieldCheck size={17} /><p>Clearing browser cookies loses access to this workspace. Download important files before clearing history or changing browsers.</p></div><button className="button danger-outline full-width" disabled={busy || !jobs.some(job => !isActive(job))} onClick={() => setModal({ type: 'clear' })}><Trash2 size={15} />Clear conversion history</button><p className="dialog-footnote">Active conversions are kept. Completed, failed, and cancelled items and their files are deleted.</p></div>}
+      {modal.type === 'settings' && <div className="workspace-settings"><div className="workspace-identity"><span className="avatar large">Y</span><div><strong>Your private workspace</strong><span>Browser session · {session?.workspace_id || 'connecting'}</span></div><ShieldCheck size={22} /></div><p className="dialog-description">No account needed. A private cookie keeps this browser's history separate from everyone else's. It is not a cross-device account.</p><label className="slider-field"><span>Preview volume <strong>{Math.round(volume * 100)}%</strong></span><input aria-label="Workspace preview volume" type="range" min={0} max={1} step={0.01} value={volume} onChange={event => setVolume(Number(event.target.value))} /></label><div className="saved-settings-note"><CheckCircle2 size={16} /><span>Your last-used transcription settings are saved automatically in this browser.</span></div><div className="pwa-install-box">{installed ? <div className="saved-settings-note"><CheckCircle2 size={16} /><span>MIDICon is installed as an app on this device.</span></div> : installPrompt ? <button className="button secondary full-width" onClick={() => void installApp()}><ArrowDownToLine size={15} />Install MIDICon app</button> : <p className="dialog-footnote">Want an app-like shortcut? Use your browser’s “Install app” or “Add to Home Screen” option. On iPhone/iPad: Share → Add to Home Screen.</p>}</div><div className="settings-info"><div><span>File retention</span><strong>{session?.retention_days || 7} days</strong></div><div><span>Storage</span><strong>This MIDICon server</strong></div><div><span>Transcription</span><strong>{session?.engines.map(engine => engine.name).join(' + ') || 'Not connected'}</strong></div></div><div className="privacy-warning"><ShieldCheck size={17} /><p>Clearing browser cookies loses access to this workspace. Download important files before clearing history or changing browsers.</p></div><button className="button danger-outline full-width" disabled={busy || !jobs.some(job => !isActive(job))} onClick={() => setModal({ type: 'clear' })}><Trash2 size={15} />Clear conversion history</button><p className="dialog-footnote">Active conversions are kept. Completed, failed, and cancelled items and their files are deleted.</p></div>}
       {modal.type === 'rename' && <form onSubmit={event => { event.preventDefault(); void confirmModal(); }}><p className="dialog-description">A name that makes this idea easy to find again.</p><label className="field-label">Conversion name<input autoFocus maxLength={160} value={rename} onChange={event => setRename(event.target.value)} required /></label><div className="dialog-actions"><button type="button" className="button secondary" onClick={() => setModal(null)}>Keep it as is</button><button className="button primary" disabled={busy || !rename.trim()} type="submit">Save name <Check size={15} /></button></div></form>}
       {(modal.type === 'delete' || modal.type === 'clear') && <><div className="delete-illustration"><Trash2 size={27} /></div><p className="dialog-description">{modal.type === 'delete' ? <>“{modal.job.title}” and its MIDI, audio, and note files will be permanently removed from this server.</> : 'All completed, failed, and cancelled conversions and their files will be permanently removed. Active conversions will stay in the queue.'}</p><p className="dialog-footnote">Download anything you want to keep first. This cannot be undone.</p><div className="dialog-actions"><button className="button secondary" disabled={busy} onClick={() => setModal(null)}>Keep my music</button><button className="button danger" disabled={busy} onClick={() => void confirmModal()}>{busy ? <LoaderCircle size={15} className="spin" /> : <Trash2 size={15} />}{modal.type === 'clear' ? 'Clear history' : 'Delete conversion'}</button></div></>}
       {modal.type === 'about' && <div className="about-dialog"><span className="brand-mark large"><KeyboardMusic size={33} /></span><h3>Nullx MIDICon</h3><p>An open creative workspace for turning recordings into playable piano MIDI. Built on the original instrument-agnostic research toolkit, with a piano-specialist engine and Spotify Basic Pitch.</p><div className="about-features"><span><Check size={14} />Real neural transcription</span><span><Check size={14} />Private browser history</span><span><Check size={14} />MIDI, JSON & CSV exports</span><span><Check size={14} />Open research attribution</span></div><p className="dialog-footnote">Automatic transcription is an estimate, not a perfect score. Clean solo piano works best. See the guide for model credits and limitations.</p><button className="button primary full-width" onClick={() => { setModal(null); navigate('guide'); }}>Explore the guide <ArrowRight size={15} /></button></div>}

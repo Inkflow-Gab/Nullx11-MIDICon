@@ -17,7 +17,7 @@ Click either image to open the video on YouTube.
 
 A browser-based **Nullx MIDICon Studio** is included: upload audio/video or a YouTube link, watch real conversion progress, preview the piano roll, refine note settings, download MIDI/JSON/CSV, and keep a private per-browser history. See [`README_WEB.md`](README_WEB.md) for setup, Docker, accuracy measurements, and limitations.
 
-An **Android companion APK** is built by GitHub Actions. It connects to a deployed MIDICon server over HTTPS; it does not bundle the Python transcription backend. See [`README_ANDROID.md`](README_ANDROID.md) for the Actions artifact, first-launch setup, and local Gradle build.
+The studio is also an **installable PWA**: on supported browsers you can add it to your home screen/desktop and launch it like an app. The service worker caches only the static app shell; conversion, history, and downloads still require the server.
 
 ```bash
 bash scripts/run_web.sh   # after the one-time setup in README_WEB.md

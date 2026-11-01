@@ -2,7 +2,6 @@
 .venv
 .web-data
 node_modules
-android
 web/node_modules
 web/dist
 web/test-results

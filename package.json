@@ -10,8 +10,6 @@
     "dev:api": ".venv/bin/python -m uvicorn webapp.main:app --host 0.0.0.0 --port 8000 --reload",
     "test": ".venv/bin/python -m pytest tests/web/test_studio.py -q",
     "test:models": "RUN_REAL_MODEL_TESTS=1 .venv/bin/python -m pytest tests/web/test_real_models.py -q",
-    "test:e2e": "cd web && npx playwright test",
-    "android:build": "cd android && ./gradlew :app:assembleDebug",
-    "android:test": "cd android && ./gradlew :app:testDebugUnitTest :app:lintDebug"
+    "test:e2e": "cd web && npx playwright test"
   }
 }
