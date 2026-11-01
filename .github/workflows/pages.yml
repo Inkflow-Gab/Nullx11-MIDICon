@@ -2,7 +2,7 @@ name: Deploy MIDICon to GitHub Pages
 
 on:
   push:
-    branches: [main, arena/fc52feb0-nullx11-midicon]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
