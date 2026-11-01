@@ -26,15 +26,15 @@ The same frontend detects which mode is available. GitHub Pages cannot execute t
 
 ## GitHub Pages (browser studio)
 
-The public static site is intended for:
+The public static site is live at:
 
 ```text
 https://inkflow-gab.github.io/Nullx11-MIDICon/
 ```
 
-Deployment is defined in [`.github/workflows/pages.yml`](.github/workflows/pages.yml). It builds only `web/`, uploads `web/dist`, and deploys with the official GitHub Pages actions. Vite uses a relative base (`./`), and the manifest/service worker/model URLs are subpath-safe.
+Deployment is defined in [`.github/workflows/pages.yml`](.github/workflows/pages.yml). It builds only `web/`, uploads `web/dist`, and deploys with the official GitHub Pages actions. Vite uses a relative base (`./`), and the manifest/service worker/model URLs are subpath-safe. The workflow deploys from `main`; the repository’s `github-pages` environment protects that branch.
 
-**Repository setting required once:** GitHub → Settings → Pages → Build and deployment → Source: **GitHub Actions**. The integration used in this workspace can push the workflow but cannot enable Pages itself (`POST /repos/.../pages` returns 403). If that setting is off, the workflow’s Configure Pages step will fail until an owner enables it.
+**Repository setting required once for a fork/new repo:** GitHub → Settings → Pages → Build and deployment → Source: **GitHub Actions**. If that setting is off, the workflow’s Configure Pages step will fail until an owner enables it.
 
 Browser-mode limits and guarantees:
 
